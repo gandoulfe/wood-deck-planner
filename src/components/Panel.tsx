@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { AppConfig, LambourdeStructure, BackgroundImage, CalibrationState, EssenceType } from '../types';
 import { getRecommendedEntraxe } from '../utils/lambourde';
 import { polygonArea, polygonPerimeter } from '../utils/geometry';
@@ -19,7 +19,7 @@ interface PanelProps {
   riveBoards: RiveBoard[];
   onReset: () => void;
   onUndo: () => void;
-  onFileUpload: (file: File) => void;
+  onFileUpload: (file: File) => Promise<void>;
   onBgImageOpacity: (opacity: number) => void;
   onBgImageRemove: () => void;
   onCalibrationStart: () => void;
@@ -83,16 +83,24 @@ export const Panel: React.FC<PanelProps> = ({
   onAddHole, onDeleteHole, onCancelHole,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [bgLoading, setBgLoading] = useState(false);
+  const [calibDistStr, setCalibDistStr] = useState(String(calibration.realDistance));
+  useEffect(() => { setCalibDistStr(String(calibration.realDistance)); }, [calibration.realDistance]);
   const recommended  = getRecommendedEntraxe(config.lameAngle);
   const holeArea     = holes.reduce((sum, h) => sum + polygonArea(h), 0);
   const area         = isClosed && points.length >= 3 ? polygonArea(points) - holeArea : null;
   const perimeter    = isClosed && points.length >= 3 ? polygonPerimeter(points) : null;
   const lc           = config.lameConfig;
 
+  const handleFile = async (file: File) => {
+    setBgLoading(true);
+    try { await onFileUpload(file); } finally { setBgLoading(false); }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file) onFileUpload(file);
+    if (file) handleFile(file);
   };
 
   const setLc = (patch: Partial<typeof lc>) => onChange({ ...config, lameConfig: { ...lc, ...patch } });
@@ -113,17 +121,22 @@ export const Panel: React.FC<PanelProps> = ({
       <div style={sec}>
         <span style={label}>Plan de fond</span>
         <div onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !bgLoading && fileInputRef.current?.click()}
           style={{
             border: '2px dashed #bcaaa4', borderRadius: 7, padding: '9px 8px',
-            textAlign: 'center', cursor: 'pointer', fontSize: 11, color: '#795548',
+            textAlign: 'center', cursor: bgLoading ? 'default' : 'pointer', fontSize: 11, color: '#795548',
             marginBottom: 7, background: bgImage ? 'rgba(121,85,72,0.06)' : '#fff',
           }}>
-          {bgImage ? '↩ Changer le plan' : '📄 Glisser/cliquer — image ou PDF'}
+          {bgLoading
+            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #bcaaa4', borderTopColor: '#795548', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                Chargement…
+              </span>
+            : bgImage ? '↩ Changer le plan' : '📄 Glisser/cliquer — image ou PDF'}
         </div>
         <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.svg,.gif,.pdf"
           style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files?.[0]; if (f) onFileUpload(f); e.target.value = ''; }} />
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
 
         {bgImage && (
           <>
@@ -147,9 +160,13 @@ export const Panel: React.FC<PanelProps> = ({
             {calibration.phase === 'measure' && (
               <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 5, padding: 7 }}>
                 <label style={{ ...label, marginBottom: 5 }}>Distance réelle P1→P2 (m)</label>
-                <input style={{ ...inp, marginBottom: 6 }} type="number" min={0.01} step={0.01}
-                  value={calibration.realDistance}
-                  onChange={e => onCalibrationDistanceChange(Number(e.target.value))} autoFocus />
+                <input style={{ ...inp, marginBottom: 6 }} type="text" inputMode="decimal"
+                  value={calibDistStr}
+                  onChange={e => {
+                    setCalibDistStr(e.target.value);
+                    const n = parseFloat(e.target.value.replace(',', '.'));
+                    if (!isNaN(n) && n > 0) onCalibrationDistanceChange(n);
+                  }} autoFocus />
                 <button style={{ ...btn('primary'), marginBottom: 5 }} onClick={onCalibrationApply}>✓ Appliquer l'échelle</button>
               </div>
             )}

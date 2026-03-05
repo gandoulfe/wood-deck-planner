@@ -73,6 +73,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   // ── keyboard ────────────────────────────────────────────────────────────
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if ((e.key === 'z' && (e.ctrlKey || e.metaKey)) || e.key === 'Backspace') {
         e.preventDefault();
         if (isDrawingHole) onHoleUndo();
