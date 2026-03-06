@@ -732,7 +732,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           <g>
             <rect x="50%" y="0" width="400" height="28" transform="translate(-200,0)" fill="rgba(21,101,192,0.88)" />
             <text x="50%" y="14" textAnchor="middle" dominantBaseline="middle" fontSize="12" fontFamily="system-ui" fill="#fff" fontWeight="600">
-              {currentHole.length < 3 ? 'Dessinez le contour du trou — snap 5 cm'
+              {currentHole.length < 3 ? 'Dessinez le contour du trou — snap 1 cm'
                 : nearFirstHole ? 'Cliquer pour fermer le trou'
                 : 'Clic droit / Backspace pour annuler — Escape pour fermer'}
             </text>
@@ -742,7 +742,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           <g>
             <rect x="50%" y="0" width="340" height="28" transform="translate(-170,0)" fill="rgba(33,33,33,0.75)" />
             <text x="50%" y="14" textAnchor="middle" dominantBaseline="middle" fontSize="12" fontFamily="system-ui" fill="#fff">
-              {points.length < 3 ? 'Cliquez pour ajouter des points — snap 5 cm'
+              {points.length < 3 ? 'Cliquez pour ajouter des points — snap 1 cm'
                 : nearFirst ? 'Cliquer pour fermer le polygone'
                 : 'Clic droit / Backspace pour annuler — Escape pour fermer'}
             </text>

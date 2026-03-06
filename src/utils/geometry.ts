@@ -163,7 +163,7 @@ export function clipLineToShape(
   return segments;
 }
 
-export function snapToGrid(p: Point, grid = 0.05): Point {
+export function snapToGrid(p: Point, grid = 0.01): Point {
   return {
     x: Math.round(p.x / grid) * grid,
     y: Math.round(p.y / grid) * grid,
