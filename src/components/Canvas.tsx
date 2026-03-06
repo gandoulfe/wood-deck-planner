@@ -5,6 +5,15 @@ import { Point, LambourdeStructure, BackgroundImage, CalibrationState, LameConfi
 import { distance, snapToGrid } from '../utils/geometry';
 import { LameItem, RiveBoard, ESSENCES, lameAxes } from '../utils/lames';
 
+interface InactiveSection {
+  points: Point[];
+  holes: Point[][];
+  lames: LameItem[];
+  riveBoards: RiveBoard[];
+  lameConfig: LameConfig;
+  lameAngle: number;
+}
+
 interface CanvasProps {
   points: Point[];
   isClosed: boolean;
@@ -19,6 +28,8 @@ interface CanvasProps {
   isDrawingHole: boolean;
   riveBoards: RiveBoard[];
   showStructure: boolean;
+  inactiveSections?: InactiveSection[];
+  snapPoints?: Point[];
   onPointAdd: (p: Point) => void;
   onClose: () => void;
   onUndo: () => void;
@@ -47,6 +58,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   points, isClosed, structure, lames, lameConfig, lameAngle,
   bgImage, calibration,
   holes, currentHole, isDrawingHole, riveBoards, showStructure,
+  inactiveSections, snapPoints,
   onPointAdd, onClose, onUndo, onVertexMove, onBgImageMove, onCalibrationPoint,
   onHolePointAdd, onHoleClose, onHoleUndo, onCancelHole,
   onHoleVertexMove, onToggleRiveEdge,
@@ -66,6 +78,16 @@ export const Canvas: React.FC<CanvasProps> = ({
   // ── coordinate helpers ──────────────────────────────────────────────────
   const toSvg   = useCallback((m: Point): Point => ({ x: m.x * scale + offset.x, y: m.y * scale + offset.y }), [scale, offset]);
   const toMeter = useCallback((sx: number, sy: number): Point => ({ x: (sx - offset.x) / scale, y: (sy - offset.y) / scale }), [scale, offset]);
+
+  // Snap to cross-section vertices (slightly larger hit area than vertex hit)
+  const snapToSectionVertex = useCallback((m: Point, svg: Point): Point => {
+    if (!snapPoints?.length) return m;
+    for (const sp of snapPoints) {
+      const ss = toSvg(sp);
+      if (Math.hypot(svg.x - ss.x, svg.y - ss.y) < VERTEX_HIT_PX + 6) return sp;
+    }
+    return m;
+  }, [snapPoints, toSvg]);
   const svgXY   = useCallback((e: React.MouseEvent | MouseEvent): Point => {
     const r = svgRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -129,7 +151,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    const m = snapToGrid(toMeter(svg.x, svg.y));
+    const m = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
     setMouse(m);
 
     if (isClosed && !isDrawingHole) {
@@ -183,7 +205,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       const fs = toSvg(currentHole[0]);
       setNearFirstHole(Math.hypot(svg.x - fs.x, svg.y - fs.y) < CLOSE_PX);
     } else setNearFirstHole(false);
-  }, [svgXY, interaction, toMeter, toSvg, isClosed, points, holes, bgImage, scale, onVertexMove, onBgImageMove, isDrawingHole, currentHole, onHoleVertexMove]);
+  }, [svgXY, interaction, toMeter, toSvg, snapToSectionVertex, isClosed, points, holes, bgImage, scale, onVertexMove, onBgImageMove, isDrawingHole, currentHole, onHoleVertexMove]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     isDragging.current = false;
@@ -221,7 +243,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0 || isDragging.current) return;
     const svg = svgXY(e);
-    const m   = snapToGrid(toMeter(svg.x, svg.y));
+    const m   = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
 
     if (calibration.phase === 'p1' || calibration.phase === 'p2') { onCalibrationPoint(m); return; }
 
@@ -246,7 +268,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       if (Math.hypot(svg.x - fs.x, svg.y - fs.y) < CLOSE_PX) { onClose(); return; }
     }
     onPointAdd(m);
-  }, [svgXY, toMeter, calibration, isDrawingHole, currentHole, onHolePointAdd, onHoleClose, isClosed, points, toSvg, onCalibrationPoint, onClose, onPointAdd, hoverEdge, hoverVertex, hoverHoleVertex, onToggleRiveEdge]);
+  }, [svgXY, toMeter, snapToSectionVertex, calibration, isDrawingHole, currentHole, onHolePointAdd, onHoleClose, isClosed, points, toSvg, onCalibrationPoint, onClose, onPointAdd, hoverEdge, hoverVertex, hoverHoleVertex, onToggleRiveEdge]);
 
   const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
@@ -387,6 +409,16 @@ export const Canvas: React.FC<CanvasProps> = ({
               <path d={shapePath} clipRule="evenodd" fillRule="evenodd" />
             </clipPath>
           )}
+          {/* Inactive section clip paths */}
+          {inactiveSections?.map((sec, si) => {
+            const sp = [sec.points, ...sec.holes].map(ptsToSubpath).join(' ');
+            if (!sp) return null;
+            return (
+              <clipPath key={`ic-clip-${si}`} id={`${gridId}-ic${si}`}>
+                <path d={sp} clipRule="evenodd" fillRule="evenodd" />
+              </clipPath>
+            );
+          })}
         </defs>
 
         {/* Background grid */}
@@ -409,6 +441,47 @@ export const Canvas: React.FC<CanvasProps> = ({
               style={{ pointerEvents: 'none' }} />
           </>
         )}
+
+        {/* ── Inactive sections ─────────────────────────────────────── */}
+        {inactiveSections?.map((sec, si) => {
+          const secShapePath = [sec.points, ...sec.holes].map(ptsToSubpath).join(' ');
+          if (!secShapePath) return null;
+          const secPolyStr = sec.points.map(p => { const sv = toSvg(p); return `${sv.x},${sv.y}`; }).join(' ');
+          const clipId = `${gridId}-ic${si}`;
+          const secAxes = lameAxes(sec.lameAngle);
+          const secColor = ESSENCES[sec.lameConfig.essence].color;
+          const secGrain = ESSENCES[sec.lameConfig.essence].grainColor;
+          return (
+            <g key={`inactive-${si}`} opacity="0.55">
+              {/* Fill */}
+              <path d={secShapePath} fillRule="evenodd" fill="rgba(139,195,74,0.10)" stroke="none" />
+              {/* Lames (simplified — no grain lines) */}
+              {sec.lameConfig.visible && sec.lames.length > 0 && (
+                <g clipPath={`url(#${clipId})`}>
+                  {sec.lames.map((lame, li) => {
+                    if (!lame.isRive) {
+                      const nb = { x: lame.t * secAxes.lambDir.x, y: lame.t * secAxes.lambDir.y };
+                      const fb = { x: (lame.t + lame.width) * secAxes.lambDir.x, y: (lame.t + lame.width) * secAxes.lambDir.y };
+                      return <polygon key={li} points={lamePoly(nb, fb, secAxes.spreadDir)}
+                        fill={secColor} stroke={secGrain} strokeWidth="0.5" opacity="0.75" />;
+                    }
+                    const nb = { x: lame.t * secAxes.spreadDir.x, y: lame.t * secAxes.spreadDir.y };
+                    const fb = { x: (lame.t + lame.width) * secAxes.spreadDir.x, y: (lame.t + lame.width) * secAxes.spreadDir.y };
+                    return <polygon key={li} points={lamePoly(nb, fb, secAxes.lambDir)}
+                      fill={secColor} stroke={secGrain} strokeWidth="0.8" opacity="0.80" />;
+                  })}
+                </g>
+              )}
+              {/* Outline */}
+              <polygon points={secPolyStr} fill="none" stroke="#9e9087" strokeWidth="2" strokeDasharray="6,3" />
+              {/* Snap-point vertices */}
+              {sec.points.map((p, pi) => {
+                const sv = toSvg(p);
+                return <circle key={pi} cx={sv.x} cy={sv.y} r={4} fill="#fff" stroke="#9e9087" strokeWidth="1.5" />;
+              })}
+            </g>
+          );
+        })}
 
         {/* Polygon fill (dim, behind lames) — evenodd makes holes transparent */}
         {isClosed && points.length >= 3 && !lameConfig.visible && shapePath && (
@@ -699,6 +772,14 @@ export const Canvas: React.FC<CanvasProps> = ({
           <line x1={cal1Svg.x} y1={cal1Svg.y} x2={cal2Svg.x} y2={cal2Svg.y}
             stroke="#d32f2f" strokeWidth="1.5" strokeDasharray="5,3" />
         )}
+
+        {/* Snap point indicator */}
+        {mouse && snapPoints?.map((sp, i) => {
+          const ss = toSvg(sp);
+          const curSvg = toSvg(mouse);
+          if (Math.hypot(curSvg.x - ss.x, curSvg.y - ss.y) > VERTEX_HIT_PX + 6) return null;
+          return <circle key={i} cx={ss.x} cy={ss.y} r={9} fill="none" stroke="#ff9800" strokeWidth="2" strokeDasharray="3,2" />;
+        })}
 
         {/* Cursor coords */}
         {mouse && (

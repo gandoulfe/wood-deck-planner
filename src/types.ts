@@ -1,3 +1,13 @@
+export interface Section {
+  id: string;
+  name: string;
+  points: Point[];
+  isClosed: boolean;
+  lameAngle: number;   // per-section board angle
+  riveEdges: number[]; // per-section rive edge indices
+  holes: Point[][];
+}
+
 export interface Point {
   x: number; // meters
   y: number; // meters

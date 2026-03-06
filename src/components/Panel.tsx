@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { AppConfig, LambourdeStructure, BackgroundImage, CalibrationState, EssenceType } from '../types';
+import { AppConfig, LambourdeStructure, BackgroundImage, CalibrationState, EssenceType, Section } from '../types';
 import { getRecommendedEntraxe } from '../utils/lambourde';
 import { polygonArea, polygonPerimeter } from '../utils/geometry';
 import { ESSENCES, LameMetres, RiveBoard } from '../utils/lames';
@@ -21,6 +21,11 @@ interface PanelProps {
   holes: Point[][];
   isDrawingHole: boolean;
   riveBoards: RiveBoard[];
+  sections: Section[];
+  activeId: string;
+  onAddSection: () => void;
+  onDeleteSection: (id: string) => void;
+  onSelectSection: (id: string) => void;
   onReset: () => void;
   onUndo: () => void;
   onFileUpload: (file: File) => Promise<void>;
@@ -75,6 +80,7 @@ export const Panel: React.FC<PanelProps> = ({
   points, isClosed, structure, lameMetres,
   bgImage, calibration,
   holes, isDrawingHole, riveBoards,
+  sections, activeId, onAddSection, onDeleteSection, onSelectSection,
   onReset, onUndo,
   onFileUpload, onBgImageOpacity, onBgImageRemove,
   onCalibrationStart, onCalibrationDistanceChange, onCalibrationApply, onCalibrationCancel,
@@ -158,6 +164,42 @@ export const Panel: React.FC<PanelProps> = ({
         <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#3e2723' }}>{T('panel.title')}</h2>
         <p style={{ margin: '2px 0 0', fontSize: 10, color: '#795548' }}>{T('panel.subtitle')}</p>
       </div>
+
+      {/* ── Sections ────────────────────────────────────────────────────── */}
+      <div style={sec}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+          <span style={label}>{T('panel.sections')}</span>
+          <button onClick={onAddSection}
+            style={{ fontSize: 10, padding: '2px 7px', background: '#795548', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+            {T('panel.addSection')}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {sections.map(s => {
+            const isActive = s.id === activeId;
+            return (
+              <div key={s.id} onClick={() => onSelectSection(s.id)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: isActive ? '#795548' : '#fff',
+                  border: `1px solid ${isActive ? '#795548' : '#d7ccc8'}`,
+                  borderRadius: 5, padding: '4px 8px', cursor: 'pointer', fontSize: 11 }}>
+                <span style={{ color: isActive ? '#fff' : '#5d4037', fontWeight: isActive ? 700 : 400 }}>
+                  {s.name} — {s.lameAngle}°{s.isClosed ? ` · ${s.points.length}pts` : ' · …'}
+                </span>
+                {sections.length > 1 && (
+                  <button onClick={e => { e.stopPropagation(); onDeleteSection(s.id); }}
+                    style={{ background: 'none', border: 'none', color: isActive ? '#ffcdd2' : '#c62828',
+                      cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1, fontFamily: 'inherit' }}>
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <hr style={div} />
 
       {/* ── Plan de fond ────────────────────────────────────────────────── */}
       <div style={sec}>

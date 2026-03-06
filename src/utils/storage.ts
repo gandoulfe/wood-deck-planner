@@ -1,18 +1,17 @@
-import { Point, AppConfig, BackgroundImage } from '../types';
+import { Point, AppConfig, BackgroundImage, Section } from '../types';
 
-const STORAGE_KEY = 'terrasse-v1';
-const FORMAT_VERSION = 1;
+const STORAGE_KEY    = 'terrasse-v2';
+const FORMAT_VERSION = 2;
 
 export interface ProjectData {
   version: typeof FORMAT_VERSION;
-  points: Point[];
-  isClosed: boolean;
+  sections: Section[];
+  activeId: string;
   config: AppConfig;
-  holes: Point[][];
   bgImage?: BackgroundImage | null;
 }
 
-// ── localStorage auto-save (no bgImage to stay within quota) ──────────────────
+// ── localStorage auto-save ─────────────────────────────────────────────────────
 
 export function saveProject(data: Omit<ProjectData, 'version' | 'bgImage'>): void {
   try {
@@ -22,19 +21,36 @@ export function saveProject(data: Omit<ProjectData, 'version' | 'bgImage'>): voi
 
 export function loadProject(): ProjectData | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as ProjectData;
-    if (data.version !== FORMAT_VERSION) return null;
-    return data;
+    // v2
+    const raw2 = localStorage.getItem(STORAGE_KEY);
+    if (raw2) {
+      const d = JSON.parse(raw2) as ProjectData;
+      if (d.version === FORMAT_VERSION && Array.isArray(d.sections)) return d;
+    }
+    // v1 → migrate
+    const raw1 = localStorage.getItem('terrasse-v1');
+    if (raw1) {
+      const d = JSON.parse(raw1) as {
+        version?: number; points?: Point[]; isClosed?: boolean;
+        config?: AppConfig; holes?: Point[][];
+      };
+      if (Array.isArray(d.points)) {
+        const section: Section = {
+          id: '1', name: 'Section 1',
+          points: d.points ?? [],
+          isClosed: d.isClosed ?? false,
+          lameAngle: d.config?.lameAngle ?? 0,
+          riveEdges: d.config?.lameConfig?.riveEdges ?? [],
+          holes: d.holes ?? [],
+        };
+        return { version: 2, sections: [section], activeId: '1', config: d.config! };
+      }
+    }
+    return null;
   } catch { return null; }
 }
 
-export function clearProject(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-// ── File export (full, includes bgImage) ──────────────────────────────────────
+// ── File export ────────────────────────────────────────────────────────────────
 
 export function exportProject(data: Omit<ProjectData, 'version'>): void {
   const payload: ProjectData = { ...data, version: FORMAT_VERSION };
@@ -47,16 +63,30 @@ export function exportProject(data: Omit<ProjectData, 'version'>): void {
   URL.revokeObjectURL(url);
 }
 
-// ── File import ───────────────────────────────────────────────────────────────
+// ── File import ────────────────────────────────────────────────────────────────
 
 export function importProject(file: File): Promise<ProjectData> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result as string) as ProjectData;
-        if (!Array.isArray(data.points)) throw new Error('Format invalide');
-        resolve(data);
+        const raw = JSON.parse(reader.result as string);
+        // v2
+        if (raw.version === 2 && Array.isArray(raw.sections)) { resolve(raw as ProjectData); return; }
+        // v1
+        if (Array.isArray(raw.points)) {
+          const section: Section = {
+            id: '1', name: 'Section 1',
+            points: raw.points,
+            isClosed: raw.isClosed ?? false,
+            lameAngle: raw.config?.lameAngle ?? 0,
+            riveEdges: raw.config?.lameConfig?.riveEdges ?? [],
+            holes: raw.holes ?? [],
+          };
+          resolve({ version: 2, sections: [section], activeId: '1', config: raw.config });
+          return;
+        }
+        throw new Error('Format invalide');
       } catch (e) { reject(e); }
     };
     reader.onerror = reject;

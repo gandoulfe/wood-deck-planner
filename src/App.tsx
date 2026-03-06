@@ -1,7 +1,7 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Canvas } from './components/Canvas';
 import { Panel } from './components/Panel';
-import { Point, AppConfig, BackgroundImage, CalibrationState } from './types';
+import { Point, AppConfig, BackgroundImage, CalibrationState, Section } from './types';
 import { generateStructure, getRecommendedEntraxe } from './utils/lambourde';
 import { renderPdfPage } from './utils/pdf';
 import { generateLames, computeLameMetres, generateRiveBoards } from './utils/lames';
@@ -29,6 +29,10 @@ const DEFAULT_CONFIG: AppConfig = {
 
 const DEFAULT_CALIBRATION: CalibrationState = { phase: 'idle', p1: null, p2: null, realDistance: 1 };
 
+function makeSection(id: string, name: string, lameAngle = 0): Section {
+  return { id, name, points: [], isClosed: false, lameAngle, riveEdges: [], holes: [] };
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => {
     const saved = localStorage.getItem('lang') as Lang | null;
@@ -50,51 +54,79 @@ export default function App() {
     localStorage.setItem('unit', u);
   }, []);
 
-  const [points,   setPoints]   = useState<Point[]>([]);
-  const [isClosed, setIsClosed] = useState(false);
-  const [config,   setConfig]   = useState<AppConfig>(DEFAULT_CONFIG);
-  const [bgImage,  setBgImage]  = useState<BackgroundImage | null>(null);
+  // ── init from localStorage ─────────────────────────────────────────────
+  const [_saved] = useState(() => loadProject());
+
+  const [sections, setSections] = useState<Section[]>(() => {
+    if (_saved?.sections?.length) return _saved.sections;
+    return [makeSection('1', 'Section 1')];
+  });
+
+  const [activeId, setActiveId] = useState<string>(() => _saved?.activeId ?? '1');
+
+  const [config, setConfig] = useState<AppConfig>(() => {
+    if (!_saved?.config) return DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG, ..._saved.config, lameConfig: { ...DEFAULT_CONFIG.lameConfig, ..._saved.config.lameConfig, riveEdges: [] } };
+  });
+
+  const [bgImage,  setBgImage]  = useState<BackgroundImage | null>(() => _saved?.bgImage ?? null);
   const [calibration, setCalibration] = useState<CalibrationState>(DEFAULT_CALIBRATION);
 
   // ── holes ─────────────────────────────────────────────────────────────
-  const [holes,         setHoles]         = useState<Point[][]>([]);
   const [currentHole,   setCurrentHole]   = useState<Point[]>([]);
   const [isDrawingHole, setIsDrawingHole] = useState(false);
 
-  // ── restore on mount ──────────────────────────────────────────────────
-  useEffect(() => {
-    const saved = loadProject();
-    if (!saved) return;
-    setPoints(saved.points ?? []);
-    setIsClosed(saved.isClosed ?? false);
-    setConfig(prev => ({ ...prev, ...saved.config, lameConfig: { ...prev.lameConfig, ...saved.config?.lameConfig } }));
-    setHoles(saved.holes ?? []);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── active section helpers ─────────────────────────────────────────────
+  const activeSec = sections.find(s => s.id === activeId) ?? sections[0];
+  const { points, isClosed, holes } = activeSec;
+
+  const updateActive = useCallback((fn: (s: Section) => Section) => {
+    setSections(prev => prev.map(s => s.id === activeId ? fn(s) : s));
+  }, [activeId]);
+
+  // ── effective config (merges global config with per-section angle/riveEdges) ──
+  const effectiveConfig = useMemo(() => ({
+    ...config,
+    lameAngle: activeSec.lameAngle,
+    lameConfig: { ...config.lameConfig, riveEdges: activeSec.riveEdges },
+  }), [config, activeSec.lameAngle, activeSec.riveEdges]);
 
   // ── auto-save ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isClosed && points.length === 0) return;
-    saveProject({ points, isClosed, config, holes });
-  }, [points, isClosed, config, holes]);
+  // Note: we use a stable reference for sections/activeId/config
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => {
+    const hasData = sections.some(s => s.points.length > 0);
+    if (!hasData) return;
+    saveProject({ sections, activeId, config });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, activeId, config]);
 
   // ── polygon ───────────────────────────────────────────────────────────
-  const handlePointAdd   = useCallback((p: Point) => setPoints(prev => [...prev, p]), []);
-  const handleClose      = useCallback(() => { if (points.length >= 3) setIsClosed(true); }, [points.length]);
-  const handleUndo       = useCallback(() => {
+  const handlePointAdd = useCallback((p: Point) => {
+    updateActive(s => ({ ...s, points: [...s.points, p] }));
+  }, [updateActive]);
+
+  const handleClose = useCallback(() => {
+    if (points.length >= 3) updateActive(s => ({ ...s, isClosed: true }));
+  }, [points.length, updateActive]);
+
+  const handleUndo = useCallback(() => {
     if (isClosed) {
-      setIsClosed(false);
-      setConfig(prev => ({ ...prev, lameConfig: { ...prev.lameConfig, riveEdges: [] } }));
+      updateActive(s => ({ ...s, isClosed: false, riveEdges: [] }));
     } else {
-      setPoints(prev => prev.slice(0, -1));
+      updateActive(s => ({ ...s, points: s.points.slice(0, -1) }));
     }
-  }, [isClosed]);
-  const handleReset      = useCallback(() => {
-    setPoints([]); setIsClosed(false);
-    setHoles([]); setCurrentHole([]); setIsDrawingHole(false);
-  }, []);
+  }, [isClosed, updateActive]);
+
+  const handleReset = useCallback(() => {
+    updateActive(s => ({ ...s, points: [], isClosed: false, holes: [], riveEdges: [] }));
+    setCurrentHole([]);
+    setIsDrawingHole(false);
+  }, [updateActive]);
+
   const handleVertexMove = useCallback((index: number, p: Point) => {
-    setPoints(prev => prev.map((pt, i) => i === index ? p : pt));
-  }, []);
+    updateActive(s => ({ ...s, points: s.points.map((pt, i) => i === index ? p : pt) }));
+  }, [updateActive]);
 
   // ── hole handlers ─────────────────────────────────────────────────────
   const handleAddHole = useCallback(() => {
@@ -106,11 +138,11 @@ export default function App() {
 
   const handleHoleClose = useCallback(() => {
     if (currentHole.length >= 3) {
-      setHoles(prev => [...prev, currentHole]);
+      updateActive(s => ({ ...s, holes: [...s.holes, currentHole] }));
       setCurrentHole([]);
       setIsDrawingHole(false);
     }
-  }, [currentHole]);
+  }, [currentHole, updateActive]);
 
   const handleHoleUndo = useCallback(() => {
     if (currentHole.length > 0) {
@@ -126,52 +158,112 @@ export default function App() {
   }, []);
 
   const handleDeleteHole = useCallback((index: number) => {
-    setHoles(prev => prev.filter((_, i) => i !== index));
-  }, []);
+    updateActive(s => ({ ...s, holes: s.holes.filter((_, i) => i !== index) }));
+  }, [updateActive]);
 
   const handleHoleVertexMove = useCallback((holeIndex: number, vertexIndex: number, p: Point) => {
-    setHoles(prev => prev.map((hole, hi) =>
-      hi === holeIndex ? hole.map((pt, vi) => vi === vertexIndex ? p : pt) : hole,
-    ));
-  }, []);
+    updateActive(s => ({
+      ...s,
+      holes: s.holes.map((hole, hi) => hi === holeIndex ? hole.map((pt, vi) => vi === vertexIndex ? p : pt) : hole),
+    }));
+  }, [updateActive]);
 
   const handleToggleRiveEdge = useCallback((edgeIndex: number) => {
-    setConfig(prev => {
-      const curr = prev.lameConfig.riveEdges;
-      const next = curr.includes(edgeIndex) ? curr.filter(e => e !== edgeIndex) : [...curr, edgeIndex];
-      return { ...prev, lameConfig: { ...prev.lameConfig, riveEdges: next } };
+    updateActive(s => {
+      const next = s.riveEdges.includes(edgeIndex)
+        ? s.riveEdges.filter(e => e !== edgeIndex)
+        : [...s.riveEdges, edgeIndex];
+      return { ...s, riveEdges: next };
     });
-  }, []);
+  }, [updateActive]);
 
   // ── config ────────────────────────────────────────────────────────────
   const handleConfigChange = useCallback((c: AppConfig) => {
-    if (c.lameAngle !== config.lameAngle) {
-      const wasReco = Math.abs(config.entraxe - getRecommendedEntraxe(config.lameAngle)) < 0.001;
-      if (wasReco) c = { ...c, entraxe: getRecommendedEntraxe(c.lameAngle) };
+    const prevAngle = activeSec.lameAngle;
+    let newC = c;
+    if (c.lameAngle !== prevAngle) {
+      const wasReco = Math.abs(config.entraxe - getRecommendedEntraxe(prevAngle)) < 0.001;
+      if (wasReco) newC = { ...c, entraxe: getRecommendedEntraxe(c.lameAngle) };
+      updateActive(s => ({ ...s, lameAngle: newC.lameAngle }));
     }
-    setConfig(c);
-  }, [config]);
+    // Strip per-section fields from global config
+    setConfig({ ...newC, lameConfig: { ...newC.lameConfig, riveEdges: [] } });
+  }, [config.entraxe, activeSec.lameAngle, updateActive]);
 
-  // ── computed ──────────────────────────────────────────────────────────
+  // ── section management ─────────────────────────────────────────────────
+  const handleAddSection = useCallback(() => {
+    const id = String(Date.now());
+    const n = sections.length + 1;
+    const newSec = makeSection(id, `Section ${n}`, activeSec.lameAngle);
+    setSections(prev => [...prev, newSec]);
+    setActiveId(id);
+    setCurrentHole([]);
+    setIsDrawingHole(false);
+  }, [sections.length, activeSec.lameAngle]);
+
+  const handleDeleteSection = useCallback((id: string) => {
+    setSections(prev => {
+      if (prev.length <= 1) {
+        setActiveId('1');
+        return [makeSection('1', 'Section 1')];
+      }
+      const filtered = prev.filter(s => s.id !== id);
+      if (id === activeId) {
+        setActiveId(filtered[filtered.length - 1].id);
+      }
+      return filtered;
+    });
+  }, [activeId]);
+
+  const handleSelectSection = useCallback((id: string) => {
+    setActiveId(id);
+    setCurrentHole([]);
+    setIsDrawingHole(false);
+  }, []);
+
+  // ── computed (active section) ─────────────────────────────────────────
   const structure = useMemo(() => {
     if (!isClosed || points.length < 3) return null;
-    return generateStructure(points, holes, config);
-  }, [isClosed, points, holes, config]);
+    return generateStructure(points, holes, effectiveConfig);
+  }, [isClosed, points, holes, effectiveConfig]);
 
   const lameItems = useMemo(() => {
     if (!isClosed || points.length < 3) return [];
-    return generateLames(points, config.lameAngle, config.lameConfig);
-  }, [isClosed, points, config.lameAngle, config.lameConfig]);
+    return generateLames(points, activeSec.lameAngle, effectiveConfig.lameConfig);
+  }, [isClosed, points, activeSec.lameAngle, effectiveConfig.lameConfig]);
 
   const riveBoards = useMemo(() => {
     if (!isClosed || points.length < 3) return [];
-    return generateRiveBoards(points, config.lameConfig.riveEdges, config.lameConfig.riveWidth);
-  }, [isClosed, points, config.lameConfig.riveEdges, config.lameConfig.riveWidth]);
+    return generateRiveBoards(points, activeSec.riveEdges, effectiveConfig.lameConfig.riveWidth);
+  }, [isClosed, points, activeSec.riveEdges, effectiveConfig.lameConfig.riveWidth]);
 
   const lameMetres = useMemo(() => {
     if (!isClosed || points.length < 3) return null;
-    return computeLameMetres(lameItems, points, holes, config.lameAngle, riveBoards, config.entraxe, config.lameConfig.lameLength);
-  }, [isClosed, points, holes, lameItems, config.lameAngle, riveBoards, config.entraxe, config.lameConfig.lameLength]);
+    return computeLameMetres(lameItems, points, holes, activeSec.lameAngle, riveBoards, effectiveConfig.entraxe, effectiveConfig.lameConfig.lameLength);
+  }, [isClosed, points, holes, lameItems, activeSec.lameAngle, riveBoards, effectiveConfig.entraxe, effectiveConfig.lameConfig.lameLength]);
+
+  // ── computed (inactive sections for canvas) ───────────────────────────
+  const inactiveSections = useMemo(() =>
+    sections
+      .filter(s => s.id !== activeId && s.isClosed && s.points.length >= 3)
+      .map(s => {
+        const lc = { ...config.lameConfig, riveEdges: s.riveEdges };
+        return {
+          points: s.points,
+          holes: s.holes,
+          lames: generateLames(s.points, s.lameAngle, lc),
+          riveBoards: generateRiveBoards(s.points, s.riveEdges, lc.riveWidth),
+          lameConfig: lc,
+          lameAngle: s.lameAngle,
+        };
+      }),
+  [sections, activeId, config.lameConfig]);
+
+  const snapPoints = useMemo(() =>
+    sections
+      .filter(s => s.id !== activeId && s.isClosed)
+      .flatMap(s => s.points),
+  [sections, activeId]);
 
   // ── background image ──────────────────────────────────────────────────
   const placeImage = useCallback((src: string, naturalWidth: number, naturalHeight: number) => {
@@ -207,15 +299,14 @@ export default function App() {
 
   // ── export / import ───────────────────────────────────────────────────
   const handleExport = useCallback(() => {
-    exportProject({ points, isClosed, config, holes, bgImage });
-  }, [points, isClosed, config, holes, bgImage]);
+    exportProject({ sections, activeId, config, bgImage });
+  }, [sections, activeId, config, bgImage]);
 
   const handleImport = useCallback(async (file: File) => {
     const data = await importProject(file);
-    setPoints(data.points ?? []);
-    setIsClosed(data.isClosed ?? false);
-    setConfig(prev => ({ ...prev, ...data.config, lameConfig: { ...prev.lameConfig, ...data.config?.lameConfig } }));
-    setHoles(data.holes ?? []);
+    setSections(data.sections);
+    setActiveId(data.activeId);
+    setConfig(prev => ({ ...prev, ...data.config, lameConfig: { ...prev.lameConfig, ...data.config?.lameConfig, riveEdges: [] } }));
     if (data.bgImage) setBgImage(data.bgImage);
     setCurrentHole([]);
     setIsDrawingHole(false);
@@ -305,10 +396,11 @@ export default function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Canvas
           points={points} isClosed={isClosed} structure={structure}
-          lames={lameItems} lameConfig={config.lameConfig} lameAngle={config.lameAngle}
+          lames={lameItems} lameConfig={effectiveConfig.lameConfig} lameAngle={effectiveConfig.lameAngle}
           bgImage={bgImage} calibration={calibration}
           holes={holes} currentHole={currentHole} isDrawingHole={isDrawingHole}
-          riveBoards={riveBoards} showStructure={config.showStructure}
+          riveBoards={riveBoards} showStructure={effectiveConfig.showStructure}
+          inactiveSections={inactiveSections} snapPoints={snapPoints}
           onPointAdd={handlePointAdd} onClose={handleClose} onUndo={handleUndo}
           onVertexMove={handleVertexMove} onBgImageMove={handleBgImageMove}
           onCalibrationPoint={handleCalibrationPoint}
@@ -319,10 +411,12 @@ export default function App() {
         />
         <Panel
           lang={lang} unit={unit}
-          config={config} onChange={handleConfigChange}
+          config={effectiveConfig} onChange={handleConfigChange}
           points={points} isClosed={isClosed} structure={structure} lameMetres={lameMetres}
           bgImage={bgImage} calibration={calibration}
           holes={holes} isDrawingHole={isDrawingHole} riveBoards={riveBoards}
+          sections={sections} activeId={activeId}
+          onAddSection={handleAddSection} onDeleteSection={handleDeleteSection} onSelectSection={handleSelectSection}
           onReset={handleReset} onUndo={handleUndo}
           onFileUpload={handleFileUpload} onBgImageOpacity={handleBgImageOpacity} onBgImageRemove={handleBgImageRemove}
           onCalibrationStart={handleCalibrationStart}

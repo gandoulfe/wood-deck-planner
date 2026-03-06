@@ -114,6 +114,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': 'Libre',
     'panel.rangees': 'rangées',
+    'panel.sections': 'Sections de terrasse',
+    'panel.addSection': '+ Nouvelle section',
   },
 
   en: {
@@ -217,6 +219,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': 'Free',
     'panel.rangees': 'rows',
+    'panel.sections': 'Deck sections',
+    'panel.addSection': '+ New section',
   },
 
   es: {
@@ -320,6 +324,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': 'Libre',
     'panel.rangees': 'hileras',
+    'panel.sections': 'Secciones',
+    'panel.addSection': '+ Nueva sección',
   },
 
   zh: {
@@ -423,6 +429,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': '自由',
     'panel.rangees': '列',
+    'panel.sections': '区域',
+    'panel.addSection': '+ 新建区域',
   },
 
   ja: {
@@ -526,6 +534,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': '自由',
     'panel.rangees': '列',
+    'panel.sections': 'セクション',
+    'panel.addSection': '+ セクションを追加',
   },
 
   de: {
@@ -629,6 +639,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': 'Frei',
     'panel.rangees': 'Reihen',
+    'panel.sections': 'Abschnitte',
+    'panel.addSection': '+ Neuer Abschnitt',
   },
 
   ru: {
@@ -732,6 +744,8 @@ const tr: Record<Lang, TR> = {
 
     'preset.libre': 'Свободно',
     'panel.rangees': 'рядов',
+    'panel.sections': 'Секции',
+    'panel.addSection': '+ Новая секция',
   },
 };
 
