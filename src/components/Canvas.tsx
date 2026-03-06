@@ -13,6 +13,7 @@ interface InactiveSection {
   riveBoards: RiveBoard[];
   lameConfig: LameConfig;
   lameAngle: number;
+  structure: LambourdeStructure | null;
 }
 
 function pointInPolygon(p: Point, poly: Point[]): boolean {
@@ -490,6 +491,32 @@ export const Canvas: React.FC<CanvasProps> = ({
                     const fb = { x: (lame.t + lame.width) * secAxes.spreadDir.x, y: (lame.t + lame.width) * secAxes.spreadDir.y };
                     return <polygon key={li} points={lamePoly(nb, fb, secAxes.lambDir)}
                       fill={secColor} stroke={secGrain} strokeWidth="0.8" opacity="0.80" />;
+                  })}
+                </g>
+              )}
+              {/* Structure (lambourdes + plots) */}
+              {sec.structure && showStructure && (
+                <g>
+                  {sec.structure.cadreLambourdes.map((seg, i) => {
+                    const a = toSvg(seg.start), b = toSvg(seg.end);
+                    return <line key={`sc${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                      stroke="#6d4c41" strokeWidth={Math.max(2, scale * 0.04)} strokeLinecap="round" opacity="0.85" />;
+                  })}
+                  {sec.structure.lambourdes.map((seg, i) => {
+                    const a = toSvg(seg.start), b = toSvg(seg.end);
+                    return <line key={`sl${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                      stroke={seg.isRive ? '#5d4037' : '#8d6e63'}
+                      strokeWidth={seg.isRive ? riveW : lambW} strokeLinecap="round" opacity="0.9" />;
+                  })}
+                  {sec.structure.plots.map((p, i) => {
+                    const sv = toSvg(p);
+                    return <circle key={`sp${i}`} cx={sv.x} cy={sv.y} r={Math.max(4, scale * 0.025)}
+                      fill="#ff9800" stroke="#bf360c" strokeWidth="1.5" />;
+                  })}
+                  {sec.structure.cadresPlots.map((p, i) => {
+                    const sv = toSvg(p);
+                    return <circle key={`scp${i}`} cx={sv.x} cy={sv.y} r={Math.max(3, scale * 0.02)}
+                      fill="#ffb74d" stroke="#bf360c" strokeWidth="1" />;
                   })}
                 </g>
               )}

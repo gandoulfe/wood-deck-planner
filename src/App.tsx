@@ -248,6 +248,7 @@ export default function App() {
       .filter(s => s.id !== activeId && s.isClosed && s.points.length >= 3)
       .map(s => {
         const lc = { ...config.lameConfig, riveEdges: s.riveEdges };
+        const secConfig = { ...config, lameAngle: s.lameAngle, lameConfig: lc };
         return {
           id: s.id,
           points: s.points,
@@ -256,6 +257,7 @@ export default function App() {
           riveBoards: generateRiveBoards(s.points, s.riveEdges, lc.riveWidth),
           lameConfig: lc,
           lameAngle: s.lameAngle,
+          structure: generateStructure(s.points, s.holes, secConfig),
         };
       }),
   [sections, activeId, config.lameConfig]);
