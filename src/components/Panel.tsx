@@ -5,9 +5,11 @@ import { polygonArea, polygonPerimeter } from '../utils/geometry';
 import { ESSENCES, LameMetres, RiveBoard } from '../utils/lames';
 import { Point } from '../types';
 import { Lang, t, s } from '../i18n';
+import { UnitSystem, mToIn, inToM, mToFt, ftToM, fmtLg, fmtAr, unitSm, unitLg } from '../utils/units';
 
 interface PanelProps {
   lang: Lang;
+  unit: UnitSystem;
   config: AppConfig;
   onChange: (c: AppConfig) => void;
   points: Point[];
@@ -61,25 +63,14 @@ function btn(variant: 'default' | 'danger' | 'primary' | 'warn' | 'info' = 'defa
   };
 }
 
-const LAME_PRESETS = [
-  { label: '9 cm',    value: 0.090 },
-  { label: '12 cm',   value: 0.120 },
-  { label: '14.5 cm', value: 0.145 },
-  { label: '15 cm',   value: 0.150 },
-];
-
-const ANGLE_PRESETS = [
-  { label: '0°',  value: 0  },
-  { label: '45°', value: 45 },
-  { label: '90°', value: 90 },
-];
-
-const LAME_LENGTH_PRESET_VALUES = [0, 2.4, 3, 4, 4.8, 6];
+const LAME_PRESETS_M = [0.090, 0.120, 0.145, 0.150];
+const ANGLE_PRESETS  = [{ label: '0°', value: 0 }, { label: '45°', value: 45 }, { label: '90°', value: 90 }];
+const LAME_LENGTH_M  = [0, 2.4, 3, 4, 4.8, 6];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const Panel: React.FC<PanelProps> = ({
-  lang,
+  lang, unit,
   config, onChange,
   points, isClosed, structure, lameMetres,
   bgImage, calibration,
@@ -90,37 +81,70 @@ export const Panel: React.FC<PanelProps> = ({
   onAddHole, onDeleteHole, onCancelHole,
   onExport, onImport,
 }) => {
-  const T = (key: string, vars?: Record<string, string | number>) => t(lang, key, vars);
+  // ── i18n helpers ────────────────────────────────────────────────────────
+  const T  = (key: string, vars?: Record<string, string | number>) => t(lang, key, vars);
+  const uSm = unitSm(unit);
+  const uLg = unitLg(unit);
+  // Replace (m) / (м) in translated labels with current unit
+  const TU = (key: string, sm: boolean) =>
+    T(key).replace(/\(м\)/g, `(${sm ? uSm : uLg})`).replace(/\(m\)/g, `(${sm ? uSm : uLg})`);
 
+  // ── unit conversion helpers ──────────────────────────────────────────────
+  // small lengths (lame width, gap…) ↔ meters
+  const toSm  = (m: number) => unit === 'imperial' ? +mToIn(m).toFixed(4) : m;
+  const frSm  = (v: number) => unit === 'imperial' ? inToM(v) : v;
+  // large lengths (entraxe, spacing, lame length…) ↔ meters
+  const toLg  = (m: number) => unit === 'imperial' ? +mToFt(m).toFixed(4) : m;
+  const frLg  = (v: number) => unit === 'imperial' ? ftToM(v) : v;
+
+  const stepSm = unit === 'imperial' ? 0.1   : 0.005;
+  const stepLg = unit === 'imperial' ? 0.1   : 0.05;
+  const stepTh = unit === 'imperial' ? 0.05  : 0.001;
+
+  // ── local state ─────────────────────────────────────────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importRef    = useRef<HTMLInputElement>(null);
   const [bgLoading, setBgLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [legalOpen, setLegalOpen] = useState(false);
-  const [calibDistStr, setCalibDistStr] = useState(String(calibration.realDistance));
-  useEffect(() => { setCalibDistStr(String(calibration.realDistance)); }, [calibration.realDistance]);
-  const recommended  = getRecommendedEntraxe(config.lameAngle);
-  const holeArea     = holes.reduce((sum, h) => sum + polygonArea(h), 0);
-  const area         = isClosed && points.length >= 3 ? polygonArea(points) - holeArea : null;
-  const perimeter    = isClosed && points.length >= 3 ? polygonPerimeter(points) : null;
-  const lc           = config.lameConfig;
+  const [calibDistStr, setCalibDistStr] = useState(
+    String(unit === 'imperial' ? +mToFt(calibration.realDistance).toFixed(3) : calibration.realDistance)
+  );
+  useEffect(() => {
+    setCalibDistStr(
+      String(unit === 'imperial' ? +mToFt(calibration.realDistance).toFixed(3) : calibration.realDistance)
+    );
+  }, [calibration.realDistance, unit]);
+
+  const recommended = getRecommendedEntraxe(config.lameAngle);
+  const holeArea    = holes.reduce((sum, h) => sum + polygonArea(h), 0);
+  const area        = isClosed && points.length >= 3 ? polygonArea(points) - holeArea : null;
+  const perimeter   = isClosed && points.length >= 3 ? polygonPerimeter(points) : null;
+  const lc          = config.lameConfig;
 
   const handleFile = async (file: File) => {
     setBgLoading(true);
     try { await onFileUpload(file); } finally { setBgLoading(false); }
   };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   };
-
   const setLc = (patch: Partial<typeof lc>) => onChange({ ...config, lameConfig: { ...lc, ...patch } });
+
+  // ── presets ──────────────────────────────────────────────────────────────
+  const lamePresetsDisplay = LAME_PRESETS_M.map(v => ({
+    value: v,
+    label: unit === 'imperial' ? `${mToIn(v).toFixed(1)}"` : `${Math.round(v * 100)} cm`,
+  }));
 
   const lameLengthPresets = [
     { label: T('preset.libre'), value: 0 },
-    ...LAME_LENGTH_PRESET_VALUES.filter(v => v > 0).map(v => ({ label: `${v} m`, value: v })),
+    ...LAME_LENGTH_M.filter(v => v > 0).map(v => ({
+      label: unit === 'imperial' ? `${mToFt(v).toFixed(1)} ft` : `${v} m`,
+      value: v,
+    })),
   ];
 
   return (
@@ -176,13 +200,13 @@ export const Panel: React.FC<PanelProps> = ({
             )}
             {calibration.phase === 'measure' && (
               <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 5, padding: 7 }}>
-                <label style={{ ...label, marginBottom: 5 }}>{T('panel.calibDistance')}</label>
+                <label style={{ ...label, marginBottom: 5 }}>{TU('panel.calibDistance', false)}</label>
                 <input style={{ ...inp, marginBottom: 6 }} type="text" inputMode="decimal"
                   value={calibDistStr}
                   onChange={e => {
                     setCalibDistStr(e.target.value);
                     const n = parseFloat(e.target.value.replace(',', '.'));
-                    if (!isNaN(n) && n > 0) onCalibrationDistanceChange(n);
+                    if (!isNaN(n) && n > 0) onCalibrationDistanceChange(unit === 'imperial' ? ftToM(n) : n);
                   }} autoFocus />
                 <button style={{ ...btn('primary'), marginBottom: 5 }} onClick={onCalibrationApply}>{T('panel.calibApply')}</button>
               </div>
@@ -204,8 +228,7 @@ export const Panel: React.FC<PanelProps> = ({
         <span style={label}>{T('panel.orientation')}</span>
         <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
           {ANGLE_PRESETS.map(p => (
-            <button key={p.value}
-              onClick={() => onChange({ ...config, lameAngle: p.value })}
+            <button key={p.value} onClick={() => onChange({ ...config, lameAngle: p.value })}
               style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: '1px solid', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                 background: config.lameAngle === p.value ? '#795548' : '#fff',
                 color:      config.lameAngle === p.value ? '#fff'    : '#5d4037',
@@ -231,13 +254,11 @@ export const Panel: React.FC<PanelProps> = ({
           </label>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', marginBottom: 6 }}>
-          <input type="checkbox"
-            checked={config.showStructure}
+          <input type="checkbox" checked={config.showStructure}
             onChange={e => onChange({ ...config, showStructure: e.target.checked })} />
           {T('panel.showStructure')}
         </label>
 
-        {/* Essence */}
         <label style={label}>{T('panel.essence')}</label>
         <select style={{ ...inp, marginBottom: 6 }} value={lc.essence}
           onChange={e => setLc({ essence: e.target.value as EssenceType })}>
@@ -246,12 +267,10 @@ export const Panel: React.FC<PanelProps> = ({
           ))}
         </select>
 
-        {/* Width presets */}
         <label style={label}>{T('panel.lameWidth')}</label>
         <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
-          {LAME_PRESETS.map(p => (
-            <button key={p.value}
-              onClick={() => setLc({ width: p.value, riveWidth: p.value })}
+          {lamePresetsDisplay.map(p => (
+            <button key={p.value} onClick={() => setLc({ width: p.value, riveWidth: p.value })}
               style={{ flex: 1, padding: '3px 0', borderRadius: 5, border: '1px solid', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
                 background: Math.abs(lc.width - p.value) < 0.001 ? '#795548' : '#fff',
                 color:      Math.abs(lc.width - p.value) < 0.001 ? '#fff'    : '#5d4037',
@@ -263,34 +282,32 @@ export const Panel: React.FC<PanelProps> = ({
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <div style={{ flex: 1 }}>
-            <label style={label}>{T('panel.lameWidthM')}</label>
-            <input style={inp} type="number" min={0.05} max={0.30} step={0.005}
-              value={lc.width} onChange={e => setLc({ width: Number(e.target.value) })} />
+            <label style={label}>{TU('panel.lameWidthM', true)}</label>
+            <input style={inp} type="number" min={toSm(0.05)} max={toSm(0.30)} step={stepSm}
+              value={toSm(lc.width)} onChange={e => setLc({ width: frSm(Number(e.target.value)) })} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={label}>{T('panel.lameThickness')}</label>
-            <input style={inp} type="number" min={0.01} max={0.06} step={0.001}
-              value={lc.thickness} onChange={e => setLc({ thickness: Number(e.target.value) })} />
+            <label style={label}>{TU('panel.lameThickness', true)}</label>
+            <input style={inp} type="number" min={toSm(0.01)} max={toSm(0.06)} step={stepTh}
+              value={toSm(lc.thickness)} onChange={e => setLc({ thickness: frSm(Number(e.target.value)) })} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={label}>{T('panel.lameGap')}</label>
-            <input style={inp} type="number" min={0} max={0.02} step={0.001}
-              value={lc.gap} onChange={e => setLc({ gap: Number(e.target.value) })} />
+            <label style={label}>{TU('panel.lameGap', true)}</label>
+            <input style={inp} type="number" min={0} max={toSm(0.02)} step={stepTh}
+              value={toSm(lc.gap)} onChange={e => setLc({ gap: frSm(Number(e.target.value)) })} />
           </div>
         </div>
 
-        {/* Lame de finition */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', marginTop: 6 }}>
           <input type="checkbox" checked={lc.showFinition} onChange={e => setLc({ showFinition: e.target.checked })} />
           {T('panel.showFinition')}
         </label>
-        {/* Longueur commerciale */}
+
         <div style={{ marginTop: 8 }}>
           <label style={label}>{T('panel.lameLength')}</label>
           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 2 }}>
             {lameLengthPresets.map(p => (
-              <button key={p.value}
-                onClick={() => setLc({ lameLength: p.value })}
+              <button key={p.value} onClick={() => setLc({ lameLength: p.value })}
                 style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
                   background: Math.abs(lc.lameLength - p.value) < 0.01 ? '#795548' : '#fff',
                   color:      Math.abs(lc.lameLength - p.value) < 0.01 ? '#fff'    : '#5d4037',
@@ -301,17 +318,14 @@ export const Panel: React.FC<PanelProps> = ({
             ))}
           </div>
           {lc.lameLength > 0 && (
-            <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 0' }}>
-              {T('panel.lameLengthNote')}
-            </p>
+            <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 0' }}>{T('panel.lameLengthNote')}</p>
           )}
         </div>
 
-        {/* Lames de rive */}
         <div style={{ marginTop: 6 }}>
-          <label style={label}>{T('panel.riveWidth')}</label>
-          <input style={inp} type="number" min={0.05} max={0.30} step={0.005}
-            value={lc.riveWidth} onChange={e => setLc({ riveWidth: Number(e.target.value) })} />
+          <label style={label}>{TU('panel.riveWidth', true)}</label>
+          <input style={inp} type="number" min={toSm(0.05)} max={toSm(0.30)} step={stepSm}
+            value={toSm(lc.riveWidth)} onChange={e => setLc({ riveWidth: frSm(Number(e.target.value)) })} />
           {isClosed && (
             <p style={{ fontSize: 10, color: '#8d6e63', margin: '4px 0 0' }}>
               {lc.riveEdges.length === 0
@@ -325,26 +339,26 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Entraxe lambourdes ──────────────────────────────────────────── */}
       <div style={sec}>
         <span style={label}>
-          {T('panel.entraxe')}
+          {TU('panel.entraxe', false)}
           <span style={{ marginLeft: 5, fontWeight: 400, textTransform: 'none',
             color: Math.abs(config.entraxe - recommended) < 0.001 ? '#2e7d32' : '#e65100' }}>
-            {T('panel.reco', { val: recommended * 100 })}
+            {T('panel.reco', { val: unit === 'imperial' ? mToFt(recommended).toFixed(2) : recommended * 100 })}{unit === 'imperial' ? ' ft' : ''}
           </span>
         </span>
-        <input style={inp} type="number" min={0.20} max={0.80} step={0.05}
-          value={config.entraxe} onChange={e => onChange({ ...config, entraxe: Number(e.target.value) })} />
-        <input type="range" min={0.20} max={0.80} step={0.05} value={config.entraxe}
-          onChange={e => onChange({ ...config, entraxe: Number(e.target.value) })}
+        <input style={inp} type="number" min={toLg(0.20)} max={toLg(0.80)} step={stepLg}
+          value={toLg(config.entraxe)} onChange={e => onChange({ ...config, entraxe: frLg(Number(e.target.value)) })} />
+        <input type="range" min={toLg(0.20)} max={toLg(0.80)} step={stepLg}
+          value={toLg(config.entraxe)} onChange={e => onChange({ ...config, entraxe: frLg(Number(e.target.value)) })}
           style={{ width: '100%', marginTop: 3, accentColor: '#795548' }} />
       </div>
 
       {/* ── Espacement plots ────────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>{T('panel.plotSpacing')}</span>
-        <input style={inp} type="number" min={0.20} max={1.0} step={0.05}
-          value={config.plotSpacing} onChange={e => onChange({ ...config, plotSpacing: Number(e.target.value) })} />
-        <input type="range" min={0.20} max={1.0} step={0.05} value={config.plotSpacing}
-          onChange={e => onChange({ ...config, plotSpacing: Number(e.target.value) })}
+        <span style={label}>{TU('panel.plotSpacing', false)}</span>
+        <input style={inp} type="number" min={toLg(0.20)} max={toLg(1.0)} step={stepLg}
+          value={toLg(config.plotSpacing)} onChange={e => onChange({ ...config, plotSpacing: frLg(Number(e.target.value)) })} />
+        <input type="range" min={toLg(0.20)} max={toLg(1.0)} step={stepLg}
+          value={toLg(config.plotSpacing)} onChange={e => onChange({ ...config, plotSpacing: frLg(Number(e.target.value)) })}
           style={{ width: '100%', marginTop: 3, accentColor: '#795548' }} />
       </div>
 
@@ -354,27 +368,23 @@ export const Panel: React.FC<PanelProps> = ({
       {isClosed && (
         <div style={sec}>
           <span style={label}>{T('panel.holes')}</span>
-
           {isDrawingHole ? (
             <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 5, padding: 7, marginBottom: 6 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 11, color: '#1565c0' }}>
-                {T('panel.holeInstruction')}
-              </p>
+              <p style={{ margin: '0 0 6px', fontSize: 11, color: '#1565c0' }}>{T('panel.holeInstruction')}</p>
               <button style={btn('danger')} onClick={onCancelHole}>{T('panel.holeCancel')}</button>
             </div>
           ) : (
-            <button style={{ ...btn('info'), marginBottom: 6 }} onClick={onAddHole}>
-              {T('panel.holeAdd')}
-            </button>
+            <button style={{ ...btn('info'), marginBottom: 6 }} onClick={onAddHole}>{T('panel.holeAdd')}</button>
           )}
-
           {holes.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {holes.map((hole, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 5, padding: '4px 8px', fontSize: 11 }}>
                   <span style={{ color: '#1565c0' }}>
-                    {T('panel.holeItem', { n: i + 1, area: polygonArea(hole).toFixed(2) })}
+                    {T('panel.holeItem', { n: i + 1, area: unit === 'imperial'
+                      ? `${(polygonArea(hole) * 10.7639).toFixed(2)} ft²`
+                      : `${polygonArea(hole).toFixed(2)} m²` })}
                   </span>
                   <button onClick={() => onDeleteHole(i)}
                     style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1 }}>
@@ -434,10 +444,12 @@ export const Panel: React.FC<PanelProps> = ({
         ) : (
           <>
             {[
-              { label: T('panel.surfaceTerrasse'),  val: `${area!.toFixed(2)} m²` },
-              { label: T('panel.perimeter'),         val: `${perimeter!.toFixed(2)} m` },
-              holes.length > 0 ? { label: T('panel.decoupes', { count: holes.length }), val: `-${holeArea.toFixed(2)} m²` } : null,
-            ].filter(Boolean).map((r, i) => <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>)}
+              { label: T('panel.surfaceTerrasse'), val: fmtAr(area!, unit) },
+              { label: T('panel.perimeter'),       val: fmtLg(perimeter!, unit) },
+              holes.length > 0 ? { label: T('panel.decoupes', { count: holes.length }), val: `-${fmtAr(holeArea, unit)}` } : null,
+            ].filter(Boolean).map((r, i) => (
+              <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
+            ))}
 
             {lameMetres && (
               <>
@@ -445,11 +457,11 @@ export const Panel: React.FC<PanelProps> = ({
                   <span>{T('panel.lamesHeader')}</span>
                 </div>
                 {[
-                  { label: T('panel.lamesCourantes'),  val: `${lameMetres.mainCount} rangées` },
+                  { label: T('panel.lamesCourantes'), val: `${lameMetres.mainCount} ${T('panel.rangees')}` },
                   lameMetres.finitionCount > 0 ? { label: T('panel.lamesFinition'), val: `${lameMetres.finitionCount} pcs` } : null,
-                  riveBoards.length > 0 ? { label: T('panel.lamesRive'), val: `${riveBoards.length} pcs (${lameMetres.riveTotalLinear.toFixed(1)} ml)` } : null,
-                  { label: T('panel.totalLineaire'),   val: `${lameMetres.totalLinear.toFixed(1)} ml` },
-                  lameMetres.boardCount > 0 ? { label: T('panel.lamesAcheter', { length: lc.lameLength }), val: `${lameMetres.boardCount} pcs` } : null,
+                  riveBoards.length > 0 ? { label: T('panel.lamesRive'), val: `${riveBoards.length} pcs (${fmtLg(lameMetres.riveTotalLinear, unit, 1)})` } : null,
+                  { label: T('panel.totalLineaire'), val: fmtLg(lameMetres.totalLinear, unit, 1) },
+                  lameMetres.boardCount > 0 ? { label: T('panel.lamesAcheter', { length: unit === 'imperial' ? mToFt(lc.lameLength).toFixed(1) : lc.lameLength }), val: `${lameMetres.boardCount} pcs` } : null,
                   lameMetres.visCount > 0 ? { label: T('panel.vis'), val: `~${lameMetres.visCount} pcs` } : null,
                 ].filter(Boolean).map((r, i) => (
                   <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
@@ -463,12 +475,12 @@ export const Panel: React.FC<PanelProps> = ({
                   <span>{T('panel.lambourdesHeader')}</span>
                 </div>
                 {[
-                  { label: T('panel.lambourdesCount'),         val: `${structure.count} pcs` },
-                  { label: T('panel.lambourdesTotal'), val: `${structure.totalLength.toFixed(1)} m` },
+                  { label: T('panel.lambourdesCount'), val: `${structure.count} pcs` },
+                  { label: T('panel.lambourdesTotal'), val: fmtLg(structure.totalLength, unit, 1) },
                   structure.cadreLambourdes.length > 0
-                    ? { label: T('panel.cadres'),       val: `${structure.cadreLambourdes.length} pcs (${structure.cadreTotalLength.toFixed(1)} m)` }
+                    ? { label: T('panel.cadres'), val: `${structure.cadreLambourdes.length} pcs (${fmtLg(structure.cadreTotalLength, unit, 1)})` }
                     : null,
-                  { label: T('panel.plots'),   val: `${structure.plotCount} pcs` },
+                  { label: T('panel.plots'), val: `${structure.plotCount} pcs` },
                 ].filter(Boolean).map((r, i) => (
                   <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
                 ))}
@@ -491,13 +503,9 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Projet ──────────────────────────────────────────────────────── */}
       <div style={sec}>
         <span style={label}>{T('panel.projet')}</span>
-        <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 6px' }}>
-          {T('panel.projetAuto')}
-        </p>
+        <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 6px' }}>{T('panel.projetAuto')}</p>
         <div style={{ display: 'flex', gap: 5 }}>
-          <button style={{ ...btn('primary'), flex: 1 }} onClick={onExport}>
-            {T('panel.export')}
-          </button>
+          <button style={{ ...btn('primary'), flex: 1 }} onClick={onExport}>{T('panel.export')}</button>
           <button style={{ ...btn(), flex: 1 }} onClick={() => { setImportError(null); importRef.current?.click(); }}>
             {T('panel.import')}
           </button>

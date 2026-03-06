@@ -113,6 +113,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': "Cet outil est fourni \u00e0 titre indicatif et gratuit, sans aucune garantie d\u2019exactitude ou d\u2019exhaustivit\u00e9. Les calculs sont bas\u00e9s sur le DTU 51.4 mais ne constituent pas un conseil professionnel. L\u2019auteur d\u00e9cline toute responsabilit\u00e9 quant aux projets r\u00e9alis\u00e9s sur la base de ces estimations. Consultez un professionnel avant tout travaux.",
 
     'preset.libre': 'Libre',
+    'panel.rangees': 'rangées',
   },
 
   en: {
@@ -215,6 +216,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': 'This tool is provided for informational purposes only, without any warranty of accuracy or completeness. Calculations are based on DTU 51.4 but do not constitute professional advice. The author disclaims all liability for projects carried out based on these estimates. Consult a professional before any work.',
 
     'preset.libre': 'Free',
+    'panel.rangees': 'rows',
   },
 
   es: {
@@ -317,6 +319,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': 'Esta herramienta se proporciona con fines informativos y de forma gratuita, sin ninguna garant\u00eda de exactitud o exhaustividad. Los c\u00e1lculos se basan en el DTU 51.4 pero no constituyen asesoramiento profesional. El autor declina toda responsabilidad por proyectos realizados en base a estas estimaciones. Consulta a un profesional antes de cualquier obra.',
 
     'preset.libre': 'Libre',
+    'panel.rangees': 'hileras',
   },
 
   zh: {
@@ -419,6 +422,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': '本工具仅供参考，免费提供，不作任何准确性或完整性保证。计算基于 DTU 51.4，不构成专业建议。作者对基于这些估算所进行的项目不承担任何责任。施工前请咨询专业人士。',
 
     'preset.libre': '自由',
+    'panel.rangees': '列',
   },
 
   ja: {
@@ -521,6 +525,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': 'このツールは情報提供目的で無料で提供されており、正確性や完全性の保証はありません。計算はDTU 51.4に基づいていますが、専門的なアドバイスを構成するものではありません。著者はこれらの見積もりに基づいて実施されたプロジェクトについて一切の責任を負いません。工事前に専門家にご相談ください。',
 
     'preset.libre': '自由',
+    'panel.rangees': '列',
   },
 
   de: {
@@ -623,6 +628,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': 'Dieses Tool wird zu Informationszwecken kostenlos bereitgestellt, ohne jegliche Gew\u00e4hrleistung f\u00fcr Richtigkeit oder Vollst\u00e4ndigkeit. Die Berechnungen basieren auf DTU 51.4, stellen jedoch keine professionelle Beratung dar. Der Autor \u00fcbernimmt keine Haftung f\u00fcr Projekte, die auf diesen Sch\u00e4tzungen basieren. Konsultieren Sie vor jeder Arbeit einen Fachmann.',
 
     'preset.libre': 'Frei',
+    'panel.rangees': 'Reihen',
   },
 
   ru: {
@@ -725,6 +731,7 @@ const tr: Record<Lang, TR> = {
     'panel.legalText': 'Этот инструмент предоставляется в информационных целях бесплатно, без каких-либо гарантий точности или полноты. Расчёты основаны на DTU 51.4, но не являются профессиональной консультацией. Автор не несёт ответственности за проекты, выполненные на основе этих оценок. Перед началом работ проконсультируйтесь со специалистом.',
 
     'preset.libre': 'Свободно',
+    'panel.rangees': 'рядов',
   },
 };
 
@@ -739,4 +746,17 @@ export function s(lang: Lang, count: number): string {
   if (lang === 'fr' || lang === 'en' || lang === 'es') return count === 1 ? '' : 's';
   if (lang === 'de') return count === 1 ? '' : 'e'; // Punkt / Punkte
   return '';
+}
+
+/** Detect best language from browser locale */
+export function detectLang(): Lang {
+  const nav = (navigator.languages?.[0] || navigator.language || '').toLowerCase();
+  if (nav.startsWith('zh')) return 'zh';
+  if (nav.startsWith('ja')) return 'ja';
+  if (nav.startsWith('de')) return 'de';
+  if (nav.startsWith('ru')) return 'ru';
+  if (nav.startsWith('es')) return 'es';
+  if (nav.startsWith('en')) return 'en';
+  if (nav.startsWith('fr')) return 'fr';
+  return 'fr';
 }

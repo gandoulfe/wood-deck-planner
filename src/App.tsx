@@ -6,7 +6,8 @@ import { generateStructure, getRecommendedEntraxe } from './utils/lambourde';
 import { renderPdfPage } from './utils/pdf';
 import { generateLames, computeLameMetres, generateRiveBoards } from './utils/lames';
 import { saveProject, loadProject, exportProject, importProject } from './utils/storage';
-import { Lang, LANGS, t, s } from './i18n';
+import { Lang, LANGS, t, s, detectLang } from './i18n';
+import { UnitSystem, detectUnit } from './utils/units';
 
 const DEFAULT_CONFIG: AppConfig = {
   lameAngle: 0,
@@ -31,12 +32,22 @@ const DEFAULT_CALIBRATION: CalibrationState = { phase: 'idle', p1: null, p2: nul
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => {
     const saved = localStorage.getItem('lang') as Lang | null;
-    return saved && LANGS.some(l => l.code === saved) ? saved : 'fr';
+    return saved && LANGS.some(l => l.code === saved) ? saved : detectLang();
   });
 
   const handleLangChange = useCallback((l: Lang) => {
     setLang(l);
     localStorage.setItem('lang', l);
+  }, []);
+
+  const [unit, setUnit] = useState<UnitSystem>(() => {
+    const saved = localStorage.getItem('unit') as UnitSystem | null;
+    return saved === 'metric' || saved === 'imperial' ? saved : detectUnit();
+  });
+
+  const handleUnitChange = useCallback((u: UnitSystem) => {
+    setUnit(u);
+    localStorage.setItem('unit', u);
   }, []);
 
   const [points,   setPoints]   = useState<Point[]>([]);
@@ -259,8 +270,23 @@ export default function App() {
             ? t(lang, 'header.statusDrawingHole', { count: currentHole.length, s: s(lang, currentHole.length), e: currentHole.length === 1 ? '' : 'e' })
             : t(lang, 'header.statusDone')}
         </span>
+        {/* Unit toggle */}
+        <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: 10 }}>
+          {(['metric', 'imperial'] as UnitSystem[]).map(u => (
+            <button key={u} onClick={() => handleUnitChange(u)}
+              style={{
+                padding: '2px 7px', borderRadius: 4, border: '1px solid',
+                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                background: unit === u ? '#fff' : 'transparent',
+                color:      unit === u ? '#4e342e' : '#d7ccc8',
+                borderColor: unit === u ? '#fff' : 'rgba(255,255,255,0.25)',
+              }}>
+              {u === 'metric' ? 'm' : 'ft'}
+            </button>
+          ))}
+        </div>
         {/* Language selector */}
-        <div style={{ display: 'flex', gap: 3, marginLeft: 12 }}>
+        <div style={{ display: 'flex', gap: 3, marginLeft: 6 }}>
           {LANGS.map(l => (
             <button key={l.code} onClick={() => handleLangChange(l.code)}
               style={{
@@ -292,7 +318,7 @@ export default function App() {
           onToggleRiveEdge={handleToggleRiveEdge}
         />
         <Panel
-          lang={lang}
+          lang={lang} unit={unit}
           config={config} onChange={handleConfigChange}
           points={points} isClosed={isClosed} structure={structure} lameMetres={lameMetres}
           bgImage={bgImage} calibration={calibration}
