@@ -249,6 +249,7 @@ export default function App() {
       .map(s => {
         const lc = { ...config.lameConfig, riveEdges: s.riveEdges };
         return {
+          id: s.id,
           points: s.points,
           holes: s.holes,
           lames: generateLames(s.points, s.lameAngle, lc),
@@ -408,6 +409,7 @@ export default function App() {
           onHoleUndo={handleHoleUndo} onCancelHole={handleCancelHole}
           onHoleVertexMove={handleHoleVertexMove}
           onToggleRiveEdge={handleToggleRiveEdge}
+          onSelectSection={handleSelectSection}
         />
         <Panel
           lang={lang} unit={unit}

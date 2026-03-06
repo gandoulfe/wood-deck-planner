@@ -6,12 +6,22 @@ import { distance, snapToGrid } from '../utils/geometry';
 import { LameItem, RiveBoard, ESSENCES, lameAxes } from '../utils/lames';
 
 interface InactiveSection {
+  id: string;
   points: Point[];
   holes: Point[][];
   lames: LameItem[];
   riveBoards: RiveBoard[];
   lameConfig: LameConfig;
   lameAngle: number;
+}
+
+function pointInPolygon(p: Point, poly: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > p.y) !== (yj > p.y)) && p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 interface CanvasProps {
@@ -42,6 +52,7 @@ interface CanvasProps {
   onCancelHole: () => void;
   onHoleVertexMove: (holeIndex: number, vertexIndex: number, p: Point) => void;
   onToggleRiveEdge: (edgeIndex: number) => void;
+  onSelectSection?: (id: string) => void;
 }
 
 const CLOSE_PX      = 18;
@@ -61,7 +72,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   inactiveSections, snapPoints,
   onPointAdd, onClose, onUndo, onVertexMove, onBgImageMove, onCalibrationPoint,
   onHolePointAdd, onHoleClose, onHoleUndo, onCancelHole,
-  onHoleVertexMove, onToggleRiveEdge,
+  onHoleVertexMove, onToggleRiveEdge, onSelectSection,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [scale,  setScale]  = useState(80);
@@ -260,6 +271,16 @@ export const Canvas: React.FC<CanvasProps> = ({
       // Toggle rive edge if hovering one (and no vertex hovered)
       if (hoverEdge !== null && hoverVertex === null && hoverHoleVertex === null) {
         onToggleRiveEdge(hoverEdge);
+        return;
+      }
+      // Click on an inactive section to switch active
+      if (hoverVertex === null && hoverHoleVertex === null && hoverEdge === null && onSelectSection) {
+        for (const sec of (inactiveSections ?? [])) {
+          if (pointInPolygon(m, sec.points)) {
+            onSelectSection(sec.id);
+            return;
+          }
+        }
       }
       return;
     }
@@ -268,7 +289,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       if (Math.hypot(svg.x - fs.x, svg.y - fs.y) < CLOSE_PX) { onClose(); return; }
     }
     onPointAdd(m);
-  }, [svgXY, toMeter, snapToSectionVertex, calibration, isDrawingHole, currentHole, onHolePointAdd, onHoleClose, isClosed, points, toSvg, onCalibrationPoint, onClose, onPointAdd, hoverEdge, hoverVertex, hoverHoleVertex, onToggleRiveEdge]);
+  }, [svgXY, toMeter, snapToSectionVertex, calibration, isDrawingHole, currentHole, onHolePointAdd, onHoleClose, isClosed, points, toSvg, onCalibrationPoint, onClose, onPointAdd, hoverEdge, hoverVertex, hoverHoleVertex, onToggleRiveEdge, onSelectSection, inactiveSections]);
 
   const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
@@ -452,7 +473,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           const secColor = ESSENCES[sec.lameConfig.essence].color;
           const secGrain = ESSENCES[sec.lameConfig.essence].grainColor;
           return (
-            <g key={`inactive-${si}`} opacity="0.55">
+            <g key={`inactive-${si}`} opacity={isClosed && !isDrawingHole ? 1 : 0.6}>
               {/* Fill */}
               <path d={secShapePath} fillRule="evenodd" fill="rgba(139,195,74,0.10)" stroke="none" />
               {/* Lames (simplified — no grain lines) */}
