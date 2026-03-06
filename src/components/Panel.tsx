@@ -4,8 +4,10 @@ import { getRecommendedEntraxe } from '../utils/lambourde';
 import { polygonArea, polygonPerimeter } from '../utils/geometry';
 import { ESSENCES, LameMetres, RiveBoard } from '../utils/lames';
 import { Point } from '../types';
+import { Lang, t, s } from '../i18n';
 
 interface PanelProps {
+  lang: Lang;
   config: AppConfig;
   onChange: (c: AppConfig) => void;
   points: Point[];
@@ -72,18 +74,12 @@ const ANGLE_PRESETS = [
   { label: '90°', value: 90 },
 ];
 
-const LAME_LENGTH_PRESETS = [
-  { label: 'Libre', value: 0   },
-  { label: '2.4 m', value: 2.4 },
-  { label: '3 m',   value: 3   },
-  { label: '4 m',   value: 4   },
-  { label: '4.8 m', value: 4.8 },
-  { label: '6 m',   value: 6   },
-];
+const LAME_LENGTH_PRESET_VALUES = [0, 2.4, 3, 4, 4.8, 6];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const Panel: React.FC<PanelProps> = ({
+  lang,
   config, onChange,
   points, isClosed, structure, lameMetres,
   bgImage, calibration,
@@ -94,6 +90,8 @@ export const Panel: React.FC<PanelProps> = ({
   onAddHole, onDeleteHole, onCancelHole,
   onExport, onImport,
 }) => {
+  const T = (key: string, vars?: Record<string, string | number>) => t(lang, key, vars);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importRef    = useRef<HTMLInputElement>(null);
   const [bgLoading, setBgLoading] = useState(false);
@@ -120,6 +118,11 @@ export const Panel: React.FC<PanelProps> = ({
 
   const setLc = (patch: Partial<typeof lc>) => onChange({ ...config, lameConfig: { ...lc, ...patch } });
 
+  const lameLengthPresets = [
+    { label: T('preset.libre'), value: 0 },
+    ...LAME_LENGTH_PRESET_VALUES.filter(v => v > 0).map(v => ({ label: `${v} m`, value: v })),
+  ];
+
   return (
     <aside style={{
       width: 275, minWidth: 275, background: '#efebe9', borderLeft: '1px solid #d7ccc8',
@@ -128,13 +131,13 @@ export const Panel: React.FC<PanelProps> = ({
     }}>
       {/* Title */}
       <div style={{ marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#3e2723' }}>Planificateur de terrasse</h2>
-        <p style={{ margin: '2px 0 0', fontSize: 10, color: '#795548' }}>DTU 51.4 — vue de dessus</p>
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#3e2723' }}>{T('panel.title')}</h2>
+        <p style={{ margin: '2px 0 0', fontSize: 10, color: '#795548' }}>{T('panel.subtitle')}</p>
       </div>
 
       {/* ── Plan de fond ────────────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>Plan de fond</span>
+        <span style={label}>{T('panel.bgPlan')}</span>
         <div onDrop={handleDrop} onDragOver={e => e.preventDefault()}
           onClick={() => !bgLoading && fileInputRef.current?.click()}
           style={{
@@ -145,9 +148,9 @@ export const Panel: React.FC<PanelProps> = ({
           {bgLoading
             ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #bcaaa4', borderTopColor: '#795548', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                Chargement…
+                {T('panel.bgLoading')}
               </span>
-            : bgImage ? '↩ Changer le plan' : '📄 Glisser/cliquer — image ou PDF'}
+            : bgImage ? T('panel.bgChange') : T('panel.bgDrop')}
         </div>
         <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.svg,.gif,.pdf"
           style={{ display: 'none' }}
@@ -155,26 +158,25 @@ export const Panel: React.FC<PanelProps> = ({
 
         {bgImage && (
           <>
-            <label style={label}>Opacité</label>
+            <label style={label}>{T('panel.opacity')}</label>
             <input type="range" min={0.05} max={1} step={0.05} value={bgImage.opacity}
               onChange={e => onBgImageOpacity(Number(e.target.value))}
               style={{ width: '100%', accentColor: '#795548', marginBottom: 5 }} />
-            <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 7px' }}>
-              <b>Ctrl + glisser</b> sur le canvas pour déplacer
-            </p>
+            <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 7px' }}
+              dangerouslySetInnerHTML={{ __html: T('panel.ctrlDrag') }} />
 
-            <span style={label}>Calibrage de l'échelle</span>
+            <span style={label}>{T('panel.calibration')}</span>
             {calibration.phase === 'idle' && (
-              <button style={btn('warn')} onClick={onCalibrationStart}>📐 Calibrer l'échelle</button>
+              <button style={btn('warn')} onClick={onCalibrationStart}>{T('panel.calibrateBtn')}</button>
             )}
             {(calibration.phase === 'p1' || calibration.phase === 'p2') && (
               <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 5, padding: 7, fontSize: 11, color: '#e65100', marginBottom: 5 }}>
-                {calibration.phase === 'p1' ? '① Cliquez sur le canvas → P1' : '② Cliquez sur le canvas → P2'}
+                {calibration.phase === 'p1' ? T('panel.calibP1') : T('panel.calibP2')}
               </div>
             )}
             {calibration.phase === 'measure' && (
               <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 5, padding: 7 }}>
-                <label style={{ ...label, marginBottom: 5 }}>Distance réelle P1→P2 (m)</label>
+                <label style={{ ...label, marginBottom: 5 }}>{T('panel.calibDistance')}</label>
                 <input style={{ ...inp, marginBottom: 6 }} type="text" inputMode="decimal"
                   value={calibDistStr}
                   onChange={e => {
@@ -182,14 +184,14 @@ export const Panel: React.FC<PanelProps> = ({
                     const n = parseFloat(e.target.value.replace(',', '.'));
                     if (!isNaN(n) && n > 0) onCalibrationDistanceChange(n);
                   }} autoFocus />
-                <button style={{ ...btn('primary'), marginBottom: 5 }} onClick={onCalibrationApply}>✓ Appliquer l'échelle</button>
+                <button style={{ ...btn('primary'), marginBottom: 5 }} onClick={onCalibrationApply}>{T('panel.calibApply')}</button>
               </div>
             )}
             {calibration.phase !== 'idle' && (
-              <button style={{ ...btn(), marginTop: 4 }} onClick={onCalibrationCancel}>Annuler le calibrage</button>
+              <button style={{ ...btn(), marginTop: 4 }} onClick={onCalibrationCancel}>{T('panel.calibCancel')}</button>
             )}
             <div style={{ marginTop: 7 }}>
-              <button style={btn('danger')} onClick={onBgImageRemove}>Supprimer le plan</button>
+              <button style={btn('danger')} onClick={onBgImageRemove}>{T('panel.bgRemove')}</button>
             </div>
           </>
         )}
@@ -199,7 +201,7 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Orientation lames ───────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>Orientation des lames</span>
+        <span style={label}>{T('panel.orientation')}</span>
         <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
           {ANGLE_PRESETS.map(p => (
             <button key={p.value}
@@ -213,7 +215,7 @@ export const Panel: React.FC<PanelProps> = ({
             </button>
           ))}
         </div>
-        <label style={label}>Angle personnalisé (°)</label>
+        <label style={label}>{T('panel.angleCustom')}</label>
         <input style={inp} type="number" min={0} max={180} step={5}
           value={config.lameAngle}
           onChange={e => onChange({ ...config, lameAngle: Number(e.target.value) })} />
@@ -222,21 +224,21 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Lames ───────────────────────────────────────────────────────── */}
       <div style={sec}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ ...label, marginBottom: 0 }}>Lames</span>
+          <span style={{ ...label, marginBottom: 0 }}>{T('panel.lames')}</span>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' }}>
             <input type="checkbox" checked={lc.visible} onChange={e => setLc({ visible: e.target.checked })} />
-            Afficher
+            {T('panel.show')}
           </label>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', marginBottom: 6 }}>
           <input type="checkbox"
             checked={config.showStructure}
             onChange={e => onChange({ ...config, showStructure: e.target.checked })} />
-          Afficher lambourdes + plots
+          {T('panel.showStructure')}
         </label>
 
         {/* Essence */}
-        <label style={label}>Essence</label>
+        <label style={label}>{T('panel.essence')}</label>
         <select style={{ ...inp, marginBottom: 6 }} value={lc.essence}
           onChange={e => setLc({ essence: e.target.value as EssenceType })}>
           {(Object.entries(ESSENCES) as [EssenceType, typeof ESSENCES[EssenceType]][]).map(([k, v]) => (
@@ -245,7 +247,7 @@ export const Panel: React.FC<PanelProps> = ({
         </select>
 
         {/* Width presets */}
-        <label style={label}>Largeur lame</label>
+        <label style={label}>{T('panel.lameWidth')}</label>
         <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
           {LAME_PRESETS.map(p => (
             <button key={p.value}
@@ -261,17 +263,17 @@ export const Panel: React.FC<PanelProps> = ({
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <div style={{ flex: 1 }}>
-            <label style={label}>Larg. (m)</label>
+            <label style={label}>{T('panel.lameWidthM')}</label>
             <input style={inp} type="number" min={0.05} max={0.30} step={0.005}
               value={lc.width} onChange={e => setLc({ width: Number(e.target.value) })} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={label}>Ép. (m)</label>
+            <label style={label}>{T('panel.lameThickness')}</label>
             <input style={inp} type="number" min={0.01} max={0.06} step={0.001}
               value={lc.thickness} onChange={e => setLc({ thickness: Number(e.target.value) })} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={label}>Jeu (m)</label>
+            <label style={label}>{T('panel.lameGap')}</label>
             <input style={inp} type="number" min={0} max={0.02} step={0.001}
               value={lc.gap} onChange={e => setLc({ gap: Number(e.target.value) })} />
           </div>
@@ -280,13 +282,13 @@ export const Panel: React.FC<PanelProps> = ({
         {/* Lame de finition */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', marginTop: 6 }}>
           <input type="checkbox" checked={lc.showFinition} onChange={e => setLc({ showFinition: e.target.checked })} />
-          Lame de finition (dernière lame coupée)
+          {T('panel.showFinition')}
         </label>
         {/* Longueur commerciale */}
         <div style={{ marginTop: 8 }}>
-          <label style={label}>Longueur standard (calpinage)</label>
+          <label style={label}>{T('panel.lameLength')}</label>
           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 2 }}>
-            {LAME_LENGTH_PRESETS.map(p => (
+            {lameLengthPresets.map(p => (
               <button key={p.value}
                 onClick={() => setLc({ lameLength: p.value })}
                 style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -300,21 +302,21 @@ export const Panel: React.FC<PanelProps> = ({
           </div>
           {lc.lameLength > 0 && (
             <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 0' }}>
-              Joints visibles sur le canvas — tirets blancs
+              {T('panel.lameLengthNote')}
             </p>
           )}
         </div>
 
         {/* Lames de rive */}
         <div style={{ marginTop: 6 }}>
-          <label style={label}>Largeur lame de rive (m)</label>
+          <label style={label}>{T('panel.riveWidth')}</label>
           <input style={inp} type="number" min={0.05} max={0.30} step={0.005}
             value={lc.riveWidth} onChange={e => setLc({ riveWidth: Number(e.target.value) })} />
           {isClosed && (
             <p style={{ fontSize: 10, color: '#8d6e63', margin: '4px 0 0' }}>
               {lc.riveEdges.length === 0
-                ? 'Cliquez sur un bord du dessin pour ajouter une lame de rive.'
-                : `${lc.riveEdges.length} bord${lc.riveEdges.length > 1 ? 's' : ''} sélectionné${lc.riveEdges.length > 1 ? 's' : ''} — recliquez pour désactiver.`}
+                ? T('panel.riveHint')
+                : T('panel.riveSelected', { count: lc.riveEdges.length, s: s(lang, lc.riveEdges.length), n: lc.riveEdges.length === 1 ? '' : 'n' })}
             </p>
           )}
         </div>
@@ -323,10 +325,10 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Entraxe lambourdes ──────────────────────────────────────────── */}
       <div style={sec}>
         <span style={label}>
-          Entraxe lambourdes (m)
+          {T('panel.entraxe')}
           <span style={{ marginLeft: 5, fontWeight: 400, textTransform: 'none',
             color: Math.abs(config.entraxe - recommended) < 0.001 ? '#2e7d32' : '#e65100' }}>
-            reco: {recommended * 100} cm
+            {T('panel.reco', { val: recommended * 100 })}
           </span>
         </span>
         <input style={inp} type="number" min={0.20} max={0.80} step={0.05}
@@ -338,7 +340,7 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Espacement plots ────────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>Espacement plots (m)</span>
+        <span style={label}>{T('panel.plotSpacing')}</span>
         <input style={inp} type="number" min={0.20} max={1.0} step={0.05}
           value={config.plotSpacing} onChange={e => onChange({ ...config, plotSpacing: Number(e.target.value) })} />
         <input type="range" min={0.20} max={1.0} step={0.05} value={config.plotSpacing}
@@ -351,18 +353,18 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Trous ───────────────────────────────────────────────────────── */}
       {isClosed && (
         <div style={sec}>
-          <span style={label}>Trous / Découpes</span>
+          <span style={label}>{T('panel.holes')}</span>
 
           {isDrawingHole ? (
             <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 5, padding: 7, marginBottom: 6 }}>
               <p style={{ margin: '0 0 6px', fontSize: 11, color: '#1565c0' }}>
-                Dessinez le contour du trou sur le canvas puis fermez-le (cliquez le 1er point ou Escape).
+                {T('panel.holeInstruction')}
               </p>
-              <button style={btn('danger')} onClick={onCancelHole}>Annuler</button>
+              <button style={btn('danger')} onClick={onCancelHole}>{T('panel.holeCancel')}</button>
             </div>
           ) : (
             <button style={{ ...btn('info'), marginBottom: 6 }} onClick={onAddHole}>
-              + Ajouter un trou
+              {T('panel.holeAdd')}
             </button>
           )}
 
@@ -372,7 +374,7 @@ export const Panel: React.FC<PanelProps> = ({
                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 5, padding: '4px 8px', fontSize: 11 }}>
                   <span style={{ color: '#1565c0' }}>
-                    Trou {i + 1} — {polygonArea(hole).toFixed(2)} m²
+                    {T('panel.holeItem', { n: i + 1, area: polygonArea(hole).toFixed(2) })}
                   </span>
                   <button onClick={() => onDeleteHole(i)}
                     style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1 }}>
@@ -389,35 +391,35 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Légende ─────────────────────────────────────────────────────── */}
       <div style={{ ...sec, display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <span style={label}>Légende</span>
+        <span style={label}>{T('panel.legend')}</span>
         {lc.visible && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <svg width="32" height="12">
               <rect x="0" y="1" width="32" height="10" fill={ESSENCES[lc.essence].color} stroke={ESSENCES[lc.essence].grainColor} strokeWidth="0.5" />
             </svg>
-            <span>Lames ({ESSENCES[lc.essence].label})</span>
+            <span>{T('panel.legendLames', { essence: ESSENCES[lc.essence].label })}</span>
           </div>
         )}
         {[
-          { color: '#8d6e63', w: 3.5, label: 'Lambourdes' },
-          { color: '#5d4037', w: 4.5, label: 'Lambourdes de rive' },
-          { color: '#6d4c41', w: 2.5, label: 'Cadres (sous rive)' },
+          { color: '#8d6e63', w: 3.5, key: 'panel.legendLambourdes' },
+          { color: '#5d4037', w: 4.5, key: 'panel.legendRive' },
+          { color: '#6d4c41', w: 2.5, key: 'panel.legendCadres' },
         ].map((item, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <svg width="32" height="8"><line x1="0" y1="4" x2="32" y2="4" stroke={item.color} strokeWidth={item.w} strokeLinecap="round" /></svg>
-            <span>{item.label}</span>
+            <span>{T(item.key)}</span>
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <svg width="32" height="14"><circle cx="16" cy="7" r="5" fill="#ff9800" stroke="#bf360c" strokeWidth="1.5" /></svg>
-          <span>Plots de support</span>
+          <span>{T('panel.legendPlots')}</span>
         </div>
         {holes.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <svg width="32" height="14">
               <rect x="4" y="2" width="24" height="10" fill="rgba(21,101,192,0.10)" stroke="#1565c0" strokeWidth="1.5" strokeDasharray="4,2" />
             </svg>
-            <span>Trou / découpe</span>
+            <span>{T('panel.legendHole')}</span>
           </div>
         )}
       </div>
@@ -426,29 +428,29 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Métrés ──────────────────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>Métrés</span>
+        <span style={label}>{T('panel.metres')}</span>
         {!isClosed ? (
-          <p style={{ color: '#a1887f', fontSize: 11, margin: 0 }}>Fermez le polygone pour voir les métrés.</p>
+          <p style={{ color: '#a1887f', fontSize: 11, margin: 0 }}>{T('panel.metresClosed')}</p>
         ) : (
           <>
             {[
-              { label: 'Surface terrasse',  val: `${area!.toFixed(2)} m²` },
-              { label: 'Périmètre',         val: `${perimeter!.toFixed(2)} m` },
-              holes.length > 0 ? { label: `Découpes (${holes.length})`, val: `-${holeArea.toFixed(2)} m²` } : null,
+              { label: T('panel.surfaceTerrasse'),  val: `${area!.toFixed(2)} m²` },
+              { label: T('panel.perimeter'),         val: `${perimeter!.toFixed(2)} m` },
+              holes.length > 0 ? { label: T('panel.decoupes', { count: holes.length }), val: `-${holeArea.toFixed(2)} m²` } : null,
             ].filter(Boolean).map((r, i) => <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>)}
 
             {lameMetres && (
               <>
                 <div style={{ ...statRow, marginTop: 4, color: '#5d4037', fontWeight: 600, fontSize: 11 }}>
-                  <span>— Lames —</span>
+                  <span>{T('panel.lamesHeader')}</span>
                 </div>
                 {[
-                  { label: 'Lames courantes',  val: `${lameMetres.mainCount} rangées` },
-                  lameMetres.finitionCount > 0 ? { label: 'Lames de finition', val: `${lameMetres.finitionCount} pcs` } : null,
-                  riveBoards.length > 0 ? { label: 'Lames de rive', val: `${riveBoards.length} pcs (${lameMetres.riveTotalLinear.toFixed(1)} ml)` } : null,
-                  { label: 'Total linéaire',   val: `${lameMetres.totalLinear.toFixed(1)} ml` },
-                  lameMetres.boardCount > 0 ? { label: `Lames ${lc.lameLength} m à acheter`, val: `${lameMetres.boardCount} pcs` } : null,
-                  lameMetres.visCount > 0 ? { label: 'Vis estimées (×2/lambourde)', val: `~${lameMetres.visCount} pcs` } : null,
+                  { label: T('panel.lamesCourantes'),  val: `${lameMetres.mainCount} rangées` },
+                  lameMetres.finitionCount > 0 ? { label: T('panel.lamesFinition'), val: `${lameMetres.finitionCount} pcs` } : null,
+                  riveBoards.length > 0 ? { label: T('panel.lamesRive'), val: `${riveBoards.length} pcs (${lameMetres.riveTotalLinear.toFixed(1)} ml)` } : null,
+                  { label: T('panel.totalLineaire'),   val: `${lameMetres.totalLinear.toFixed(1)} ml` },
+                  lameMetres.boardCount > 0 ? { label: T('panel.lamesAcheter', { length: lc.lameLength }), val: `${lameMetres.boardCount} pcs` } : null,
+                  lameMetres.visCount > 0 ? { label: T('panel.vis'), val: `~${lameMetres.visCount} pcs` } : null,
                 ].filter(Boolean).map((r, i) => (
                   <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
                 ))}
@@ -458,15 +460,15 @@ export const Panel: React.FC<PanelProps> = ({
             {structure && (
               <>
                 <div style={{ ...statRow, marginTop: 4, color: '#5d4037', fontWeight: 600, fontSize: 11 }}>
-                  <span>— Lambourdes —</span>
+                  <span>{T('panel.lambourdesHeader')}</span>
                 </div>
                 {[
-                  { label: 'Nombre',         val: `${structure.count} pcs` },
-                  { label: 'Longueur totale', val: `${structure.totalLength.toFixed(1)} m` },
+                  { label: T('panel.lambourdesCount'),         val: `${structure.count} pcs` },
+                  { label: T('panel.lambourdesTotal'), val: `${structure.totalLength.toFixed(1)} m` },
                   structure.cadreLambourdes.length > 0
-                    ? { label: 'Cadres',       val: `${structure.cadreLambourdes.length} pcs (${structure.cadreTotalLength.toFixed(1)} m)` }
+                    ? { label: T('panel.cadres'),       val: `${structure.cadreLambourdes.length} pcs (${structure.cadreTotalLength.toFixed(1)} m)` }
                     : null,
-                  { label: 'Plots support',   val: `${structure.plotCount} pcs` },
+                  { label: T('panel.plots'),   val: `${structure.plotCount} pcs` },
                 ].filter(Boolean).map((r, i) => (
                   <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
                 ))}
@@ -480,24 +482,24 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Info DTU ────────────────────────────────────────────────────── */}
       <div style={{ fontSize: 10, color: '#8d6e63', lineHeight: 1.5, marginBottom: 12 }}>
-        <strong style={{ display: 'block', marginBottom: 2 }}>Recommandations DTU 51.4</strong>
-        Pose droite : entraxe ≤ 50 cm, plots ≤ 80 cm<br />
-        Pose 45° : entraxe ≤ 40 cm, plots ≤ 60 cm<br />
-        Lambourdes de rive en périphérie — Débord lame max 5 cm
+        <strong style={{ display: 'block', marginBottom: 2 }}>{T('panel.dtuTitle')}</strong>
+        {T('panel.dtuLine1')}<br />
+        {T('panel.dtuLine2')}<br />
+        {T('panel.dtuLine3')}
       </div>
 
       {/* ── Projet ──────────────────────────────────────────────────────── */}
       <div style={sec}>
-        <span style={label}>Projet</span>
+        <span style={label}>{T('panel.projet')}</span>
         <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 6px' }}>
-          Sauvegarde automatique dans le navigateur (sans plan de fond).
+          {T('panel.projetAuto')}
         </p>
         <div style={{ display: 'flex', gap: 5 }}>
           <button style={{ ...btn('primary'), flex: 1 }} onClick={onExport}>
-            ↓ Exporter .json
+            {T('panel.export')}
           </button>
           <button style={{ ...btn(), flex: 1 }} onClick={() => { setImportError(null); importRef.current?.click(); }}>
-            ↑ Importer .json
+            {T('panel.import')}
           </button>
         </div>
         <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }}
@@ -505,7 +507,7 @@ export const Panel: React.FC<PanelProps> = ({
             const f = e.target.files?.[0];
             if (!f) return;
             try { await onImport(f); setImportError(null); }
-            catch { setImportError('Fichier invalide ou corrompu.'); }
+            catch { setImportError(T('panel.importError')); }
             e.target.value = '';
           }} />
         {importError && <p style={{ fontSize: 10, color: '#c62828', margin: '4px 0 0' }}>{importError}</p>}
@@ -516,10 +518,10 @@ export const Panel: React.FC<PanelProps> = ({
       {/* ── Actions ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
         {!isClosed && points.length > 0 && (
-          <button style={btn()} onClick={onUndo}>↩ Annuler dernier point</button>
+          <button style={btn()} onClick={onUndo}>{T('panel.undo')}</button>
         )}
-        {isClosed && !isDrawingHole && <button style={btn()} onClick={onUndo}>✏️ Modifier le polygone</button>}
-        <button style={btn('danger')} onClick={onReset}>Recommencer</button>
+        {isClosed && !isDrawingHole && <button style={btn()} onClick={onUndo}>{T('panel.modify')}</button>}
+        <button style={btn('danger')} onClick={onReset}>{T('panel.reset')}</button>
       </div>
 
       <hr style={div} />
@@ -533,16 +535,13 @@ export const Panel: React.FC<PanelProps> = ({
           </a>
           <button onClick={() => setLegalOpen(v => !v)}
             style={{ background: 'none', border: 'none', color: '#a1887f', cursor: 'pointer', fontSize: 10, padding: 0, textDecoration: 'underline' }}>
-            {legalOpen ? 'Fermer' : 'Mentions légales'}
+            {legalOpen ? T('panel.legalClose') : T('panel.legal')}
           </button>
         </div>
         {legalOpen && (
           <div style={{ background: '#ede7e3', borderRadius: 5, padding: '6px 8px', color: '#795548', lineHeight: 1.6 }}>
-            <strong style={{ display: 'block', marginBottom: 3 }}>Mentions légales & Non-responsabilité</strong>
-            Cet outil est fourni à titre indicatif et gratuit, sans aucune garantie d'exactitude ou d'exhaustivité.
-            Les calculs sont basés sur le DTU 51.4 mais ne constituent pas un conseil professionnel.
-            L'auteur décline toute responsabilité quant aux projets réalisés sur la base de ces estimations.
-            Consultez un professionnel avant tout travaux.
+            <strong style={{ display: 'block', marginBottom: 3 }}>{T('panel.legalTitle')}</strong>
+            {T('panel.legalText')}
           </div>
         )}
       </div>

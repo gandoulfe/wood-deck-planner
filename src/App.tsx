@@ -6,6 +6,7 @@ import { generateStructure, getRecommendedEntraxe } from './utils/lambourde';
 import { renderPdfPage } from './utils/pdf';
 import { generateLames, computeLameMetres, generateRiveBoards } from './utils/lames';
 import { saveProject, loadProject, exportProject, importProject } from './utils/storage';
+import { Lang, LANGS, t, s } from './i18n';
 
 const DEFAULT_CONFIG: AppConfig = {
   lameAngle: 0,
@@ -28,6 +29,16 @@ const DEFAULT_CONFIG: AppConfig = {
 const DEFAULT_CALIBRATION: CalibrationState = { phase: 'idle', p1: null, p2: null, realDistance: 1 };
 
 export default function App() {
+  const [lang, setLang] = useState<Lang>(() => {
+    const saved = localStorage.getItem('lang') as Lang | null;
+    return saved && LANGS.some(l => l.code === saved) ? saved : 'fr';
+  });
+
+  const handleLangChange = useCallback((l: Lang) => {
+    setLang(l);
+    localStorage.setItem('lang', l);
+  }, []);
+
   const [points,   setPoints]   = useState<Point[]>([]);
   const [isClosed, setIsClosed] = useState(false);
   const [config,   setConfig]   = useState<AppConfig>(DEFAULT_CONFIG);
@@ -240,14 +251,29 @@ export default function App() {
         boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
       }}>
         <span style={{ fontSize: 20 }}>🪵</span>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Planificateur de Terrasse Bois</h1>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t(lang, 'header.title')}</h1>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#bcaaa4', fontStyle: 'italic' }}>
           {!isClosed
-            ? `${points.length} point${points.length !== 1 ? 's' : ''} — dessinez votre terrasse`
+            ? t(lang, 'header.statusDrawing', { count: points.length, s: s(lang, points.length), e: points.length === 1 ? '' : 'e' })
             : isDrawingHole
-            ? `Dessin d'un trou — ${currentHole.length} point${currentHole.length !== 1 ? 's' : ''}`
-            : 'Terrasse dessinée — glissez les points pour modifier'}
+            ? t(lang, 'header.statusDrawingHole', { count: currentHole.length, s: s(lang, currentHole.length), e: currentHole.length === 1 ? '' : 'e' })
+            : t(lang, 'header.statusDone')}
         </span>
+        {/* Language selector */}
+        <div style={{ display: 'flex', gap: 3, marginLeft: 12 }}>
+          {LANGS.map(l => (
+            <button key={l.code} onClick={() => handleLangChange(l.code)}
+              style={{
+                padding: '2px 6px', borderRadius: 4, border: '1px solid',
+                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                background: lang === l.code ? '#fff' : 'transparent',
+                color:      lang === l.code ? '#4e342e' : '#d7ccc8',
+                borderColor: lang === l.code ? '#fff' : 'rgba(255,255,255,0.25)',
+              }}>
+              {l.label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -266,6 +292,7 @@ export default function App() {
           onToggleRiveEdge={handleToggleRiveEdge}
         />
         <Panel
+          lang={lang}
           config={config} onChange={handleConfigChange}
           points={points} isClosed={isClosed} structure={structure} lameMetres={lameMetres}
           bgImage={bgImage} calibration={calibration}
