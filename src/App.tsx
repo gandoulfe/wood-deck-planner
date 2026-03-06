@@ -1,10 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Canvas } from './components/Canvas';
 import { Panel } from './components/Panel';
 import { Point, AppConfig, BackgroundImage, CalibrationState } from './types';
 import { generateStructure, getRecommendedEntraxe } from './utils/lambourde';
 import { renderPdfPage } from './utils/pdf';
 import { generateLames, computeLameMetres, generateRiveBoards } from './utils/lames';
+import { saveProject, loadProject, exportProject, importProject } from './utils/storage';
 
 const DEFAULT_CONFIG: AppConfig = {
   lameAngle: 0,
@@ -37,6 +38,22 @@ export default function App() {
   const [holes,         setHoles]         = useState<Point[][]>([]);
   const [currentHole,   setCurrentHole]   = useState<Point[]>([]);
   const [isDrawingHole, setIsDrawingHole] = useState(false);
+
+  // ── restore on mount ──────────────────────────────────────────────────
+  useEffect(() => {
+    const saved = loadProject();
+    if (!saved) return;
+    setPoints(saved.points ?? []);
+    setIsClosed(saved.isClosed ?? false);
+    setConfig(prev => ({ ...prev, ...saved.config, lameConfig: { ...prev.lameConfig, ...saved.config?.lameConfig } }));
+    setHoles(saved.holes ?? []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── auto-save ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isClosed && points.length === 0) return;
+    saveProject({ points, isClosed, config, holes });
+  }, [points, isClosed, config, holes]);
 
   // ── polygon ───────────────────────────────────────────────────────────
   const handlePointAdd   = useCallback((p: Point) => setPoints(prev => [...prev, p]), []);
@@ -166,6 +183,23 @@ export default function App() {
   const handleBgImageRemove  = useCallback(() => { setBgImage(null); setCalibration(DEFAULT_CALIBRATION); }, []);
   const handleBgImageMove    = useCallback((meterX: number, meterY: number) => setBgImage(prev => prev ? { ...prev, meterX, meterY } : null), []);
 
+  // ── export / import ───────────────────────────────────────────────────
+  const handleExport = useCallback(() => {
+    exportProject({ points, isClosed, config, holes, bgImage });
+  }, [points, isClosed, config, holes, bgImage]);
+
+  const handleImport = useCallback(async (file: File) => {
+    const data = await importProject(file);
+    setPoints(data.points ?? []);
+    setIsClosed(data.isClosed ?? false);
+    setConfig(prev => ({ ...prev, ...data.config, lameConfig: { ...prev.lameConfig, ...data.config?.lameConfig } }));
+    setHoles(data.holes ?? []);
+    if (data.bgImage) setBgImage(data.bgImage);
+    setCurrentHole([]);
+    setIsDrawingHole(false);
+    setCalibration(DEFAULT_CALIBRATION);
+  }, []);
+
   // ── calibration ───────────────────────────────────────────────────────
   const handleCalibrationStart          = useCallback(() => setCalibration({ phase: 'p1', p1: null, p2: null, realDistance: 1 }), []);
   const handleCalibrationDistanceChange = useCallback((d: number) => setCalibration(prev => ({ ...prev, realDistance: d })), []);
@@ -243,6 +277,7 @@ export default function App() {
           onCalibrationApply={handleCalibrationApply}
           onCalibrationCancel={handleCalibrationCancel}
           onAddHole={handleAddHole} onDeleteHole={handleDeleteHole} onCancelHole={handleCancelHole}
+          onExport={handleExport} onImport={handleImport}
         />
       </div>
     </div>

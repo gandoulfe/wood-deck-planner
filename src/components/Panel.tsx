@@ -29,6 +29,8 @@ interface PanelProps {
   onAddHole: () => void;
   onDeleteHole: (index: number) => void;
   onCancelHole: () => void;
+  onExport: () => void;
+  onImport: (file: File) => Promise<void>;
 }
 
 // ── micro style helpers ──────────────────────────────────────────────────────
@@ -90,9 +92,12 @@ export const Panel: React.FC<PanelProps> = ({
   onFileUpload, onBgImageOpacity, onBgImageRemove,
   onCalibrationStart, onCalibrationDistanceChange, onCalibrationApply, onCalibrationCancel,
   onAddHole, onDeleteHole, onCancelHole,
+  onExport, onImport,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importRef    = useRef<HTMLInputElement>(null);
   const [bgLoading, setBgLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [legalOpen, setLegalOpen] = useState(false);
   const [calibDistStr, setCalibDistStr] = useState(String(calibration.realDistance));
   useEffect(() => { setCalibDistStr(String(calibration.realDistance)); }, [calibration.realDistance]);
@@ -277,7 +282,6 @@ export const Panel: React.FC<PanelProps> = ({
           <input type="checkbox" checked={lc.showFinition} onChange={e => setLc({ showFinition: e.target.checked })} />
           Lame de finition (dernière lame coupée)
         </label>
-
         {/* Longueur commerciale */}
         <div style={{ marginTop: 8 }}>
           <label style={label}>Longueur standard (calpinage)</label>
@@ -481,6 +485,33 @@ export const Panel: React.FC<PanelProps> = ({
         Pose 45° : entraxe ≤ 40 cm, plots ≤ 60 cm<br />
         Lambourdes de rive en périphérie — Débord lame max 5 cm
       </div>
+
+      {/* ── Projet ──────────────────────────────────────────────────────── */}
+      <div style={sec}>
+        <span style={label}>Projet</span>
+        <p style={{ fontSize: 10, color: '#8d6e63', margin: '0 0 6px' }}>
+          Sauvegarde automatique dans le navigateur (sans plan de fond).
+        </p>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <button style={{ ...btn('primary'), flex: 1 }} onClick={onExport}>
+            ↓ Exporter .json
+          </button>
+          <button style={{ ...btn(), flex: 1 }} onClick={() => { setImportError(null); importRef.current?.click(); }}>
+            ↑ Importer .json
+          </button>
+        </div>
+        <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }}
+          onChange={async e => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            try { await onImport(f); setImportError(null); }
+            catch { setImportError('Fichier invalide ou corrompu.'); }
+            e.target.value = '';
+          }} />
+        {importError && <p style={{ fontSize: 10, color: '#c62828', margin: '4px 0 0' }}>{importError}</p>}
+      </div>
+
+      <hr style={div} />
 
       {/* ── Actions ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
