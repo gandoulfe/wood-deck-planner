@@ -8,6 +8,7 @@ import { generateLames, computeLameMetres, generateRiveBoards } from './utils/la
 import { saveProject, loadProject, exportProject, importProject } from './utils/storage';
 import { Lang, LANGS, t, s, detectLang } from './i18n';
 import { UnitSystem, detectUnit } from './utils/units';
+import { TutorialModal } from './components/TutorialModal';
 
 const DEFAULT_CONFIG: AppConfig = {
   lameAngle: 0,
@@ -48,6 +49,13 @@ export default function App() {
     const saved = localStorage.getItem('unit') as UnitSystem | null;
     return saved === 'metric' || saved === 'imperial' ? saved : detectUnit();
   });
+
+  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('terrasse-tutorial-seen'));
+
+  const handleCloseTutorial = useCallback(() => {
+    setShowTutorial(false);
+    localStorage.setItem('terrasse-tutorial-seen', '1');
+  }, []);
 
   const handleUnitChange = useCallback((u: UnitSystem) => {
     setUnit(u);
@@ -379,8 +387,17 @@ export default function App() {
             </button>
           ))}
         </div>
+        {/* Help button */}
+        <button onClick={() => setShowTutorial(true)}
+          style={{
+            marginLeft: 6, padding: '2px 7px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.35)',
+            background: 'transparent', color: '#d7ccc8', cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, fontFamily: 'inherit', lineHeight: 1,
+          }}>
+          ?
+        </button>
         {/* Language selector */}
-        <div style={{ display: 'flex', gap: 3, marginLeft: 6 }}>
+        <div style={{ display: 'flex', gap: 3, marginLeft: 4 }}>
           {LANGS.map(l => (
             <button key={l.code} onClick={() => handleLangChange(l.code)}
               style={{
@@ -431,6 +448,8 @@ export default function App() {
           onExport={handleExport} onImport={handleImport}
         />
       </div>
+
+      {showTutorial && <TutorialModal lang={lang} onClose={handleCloseTutorial} />}
     </div>
   );
 }
