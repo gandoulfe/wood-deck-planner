@@ -10,6 +10,7 @@ const DEFAULT_CONFIG: AppConfig = {
   lameAngle: 0,
   entraxe: 0.50,
   plotSpacing: 0.60,
+  showStructure: true,
   lameConfig: {
     visible: true,
     width: 0.145,
@@ -19,6 +20,7 @@ const DEFAULT_CONFIG: AppConfig = {
     showFinition: true,
     riveWidth: 0.145,
     riveEdges: [],
+    lameLength: 4,
   },
 };
 
@@ -129,8 +131,8 @@ export default function App() {
 
   const lameMetres = useMemo(() => {
     if (!isClosed || points.length < 3) return null;
-    return computeLameMetres(lameItems, points, holes, config.lameAngle, riveBoards);
-  }, [isClosed, points, holes, lameItems, config.lameAngle, riveBoards]);
+    return computeLameMetres(lameItems, points, holes, config.lameAngle, riveBoards, config.entraxe, config.lameConfig.lameLength);
+  }, [isClosed, points, holes, lameItems, config.lameAngle, riveBoards, config.entraxe, config.lameConfig.lameLength]);
 
   // ── background image ──────────────────────────────────────────────────
   const placeImage = useCallback((src: string, naturalWidth: number, naturalHeight: number) => {
@@ -220,7 +222,7 @@ export default function App() {
           lames={lameItems} lameConfig={config.lameConfig} lameAngle={config.lameAngle}
           bgImage={bgImage} calibration={calibration}
           holes={holes} currentHole={currentHole} isDrawingHole={isDrawingHole}
-          riveBoards={riveBoards}
+          riveBoards={riveBoards} showStructure={config.showStructure}
           onPointAdd={handlePointAdd} onClose={handleClose} onUndo={handleUndo}
           onVertexMove={handleVertexMove} onBgImageMove={handleBgImageMove}
           onCalibrationPoint={handleCalibrationPoint}

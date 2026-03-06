@@ -164,6 +164,8 @@ export interface LameMetres {
   riveCount: number;
   totalLinear: number;
   riveTotalLinear: number;
+  boardCount: number;     // number of standard-length boards needed (0 if lameLength=0)
+  visCount: number;       // estimated number of screws
 }
 
 export function computeLameMetres(
@@ -172,9 +174,11 @@ export function computeLameMetres(
   holes: Point[][],
   lameAngle: number,
   riveBoards: RiveBoard[],
+  entraxe: number,
+  lameLength: number,
 ): LameMetres {
   const { spreadDir, lambDir } = lameAxes(lameAngle);
-  let mainCount = 0, finitionCount = 0, totalLinear = 0;
+  let mainCount = 0, finitionCount = 0, totalLinear = 0, boardCount = 0, visCount = 0;
 
   for (const lame of lames) {
     if (lame.isFinition) finitionCount++;
@@ -183,7 +187,12 @@ export function computeLameMetres(
     const tMid = lame.t + lame.width / 2;
     const origin: Point = { x: tMid * lambDir.x, y: tMid * lambDir.y };
     const segs = clipLineToShape(origin, spreadDir, polygon, holes);
-    for (const seg of segs) totalLinear += distance(seg.start, seg.end);
+    for (const seg of segs) {
+      const segLen = distance(seg.start, seg.end);
+      totalLinear += segLen;
+      if (lameLength > 0) boardCount += Math.ceil(segLen / lameLength);
+      if (entraxe > 0) visCount += 2 * (Math.floor(segLen / entraxe) + 1);
+    }
   }
 
   return {
@@ -191,5 +200,7 @@ export function computeLameMetres(
     riveCount: riveBoards.length,
     totalLinear,
     riveTotalLinear: riveBoards.reduce((s, b) => s + b.length, 0),
+    boardCount,
+    visCount,
   };
 }

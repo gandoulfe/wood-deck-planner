@@ -70,6 +70,15 @@ const ANGLE_PRESETS = [
   { label: '90°', value: 90 },
 ];
 
+const LAME_LENGTH_PRESETS = [
+  { label: 'Libre', value: 0   },
+  { label: '2.4 m', value: 2.4 },
+  { label: '3 m',   value: 3   },
+  { label: '4 m',   value: 4   },
+  { label: '4.8 m', value: 4.8 },
+  { label: '6 m',   value: 6   },
+];
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const Panel: React.FC<PanelProps> = ({
@@ -84,6 +93,7 @@ export const Panel: React.FC<PanelProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [bgLoading, setBgLoading] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
   const [calibDistStr, setCalibDistStr] = useState(String(calibration.realDistance));
   useEffect(() => { setCalibDistStr(String(calibration.realDistance)); }, [calibration.realDistance]);
   const recommended  = getRecommendedEntraxe(config.lameAngle);
@@ -206,13 +216,19 @@ export const Panel: React.FC<PanelProps> = ({
 
       {/* ── Lames ───────────────────────────────────────────────────────── */}
       <div style={sec}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <span style={{ ...label, marginBottom: 0 }}>Lames</span>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' }}>
             <input type="checkbox" checked={lc.visible} onChange={e => setLc({ visible: e.target.checked })} />
             Afficher
           </label>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', marginBottom: 6 }}>
+          <input type="checkbox"
+            checked={config.showStructure}
+            onChange={e => onChange({ ...config, showStructure: e.target.checked })} />
+          Afficher lambourdes + plots
+        </label>
 
         {/* Essence */}
         <label style={label}>Essence</label>
@@ -261,6 +277,29 @@ export const Panel: React.FC<PanelProps> = ({
           <input type="checkbox" checked={lc.showFinition} onChange={e => setLc({ showFinition: e.target.checked })} />
           Lame de finition (dernière lame coupée)
         </label>
+
+        {/* Longueur commerciale */}
+        <div style={{ marginTop: 8 }}>
+          <label style={label}>Longueur standard (calpinage)</label>
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 2 }}>
+            {LAME_LENGTH_PRESETS.map(p => (
+              <button key={p.value}
+                onClick={() => setLc({ lameLength: p.value })}
+                style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                  background: Math.abs(lc.lameLength - p.value) < 0.01 ? '#795548' : '#fff',
+                  color:      Math.abs(lc.lameLength - p.value) < 0.01 ? '#fff'    : '#5d4037',
+                  borderColor: Math.abs(lc.lameLength - p.value) < 0.01 ? '#795548' : '#bcaaa4',
+                  fontWeight: Math.abs(lc.lameLength - p.value) < 0.01 ? 700 : 400 }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {lc.lameLength > 0 && (
+            <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 0' }}>
+              Joints visibles sur le canvas — tirets blancs
+            </p>
+          )}
+        </div>
 
         {/* Lames de rive */}
         <div style={{ marginTop: 6 }}>
@@ -400,10 +439,12 @@ export const Panel: React.FC<PanelProps> = ({
                   <span>— Lames —</span>
                 </div>
                 {[
-                  { label: 'Lames courantes',  val: `${lameMetres.mainCount} pcs` },
+                  { label: 'Lames courantes',  val: `${lameMetres.mainCount} rangées` },
                   lameMetres.finitionCount > 0 ? { label: 'Lames de finition', val: `${lameMetres.finitionCount} pcs` } : null,
                   riveBoards.length > 0 ? { label: 'Lames de rive', val: `${riveBoards.length} pcs (${lameMetres.riveTotalLinear.toFixed(1)} ml)` } : null,
                   { label: 'Total linéaire',   val: `${lameMetres.totalLinear.toFixed(1)} ml` },
+                  lameMetres.boardCount > 0 ? { label: `Lames ${lc.lameLength} m à acheter`, val: `${lameMetres.boardCount} pcs` } : null,
+                  lameMetres.visCount > 0 ? { label: 'Vis estimées (×2/lambourde)', val: `~${lameMetres.visCount} pcs` } : null,
                 ].filter(Boolean).map((r, i) => (
                   <div key={i} style={statRow}><span>{r!.label}</span><span style={statVal}>{r!.val}</span></div>
                 ))}
@@ -448,6 +489,31 @@ export const Panel: React.FC<PanelProps> = ({
         )}
         {isClosed && !isDrawingHole && <button style={btn()} onClick={onUndo}>✏️ Modifier le polygone</button>}
         <button style={btn('danger')} onClick={onReset}>Recommencer</button>
+      </div>
+
+      <hr style={div} />
+
+      {/* ── Crédit + Mentions légales ────────────────────────────────── */}
+      <div style={{ fontSize: 10, color: '#a1887f', lineHeight: 1.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <a href="https://x.com/Gandoulfe" target="_blank" rel="noopener noreferrer"
+            style={{ color: '#795548', fontWeight: 700, textDecoration: 'none' }}>
+            Par @Gandoulfe
+          </a>
+          <button onClick={() => setLegalOpen(v => !v)}
+            style={{ background: 'none', border: 'none', color: '#a1887f', cursor: 'pointer', fontSize: 10, padding: 0, textDecoration: 'underline' }}>
+            {legalOpen ? 'Fermer' : 'Mentions légales'}
+          </button>
+        </div>
+        {legalOpen && (
+          <div style={{ background: '#ede7e3', borderRadius: 5, padding: '6px 8px', color: '#795548', lineHeight: 1.6 }}>
+            <strong style={{ display: 'block', marginBottom: 3 }}>Mentions légales & Non-responsabilité</strong>
+            Cet outil est fourni à titre indicatif et gratuit, sans aucune garantie d'exactitude ou d'exhaustivité.
+            Les calculs sont basés sur le DTU 51.4 mais ne constituent pas un conseil professionnel.
+            L'auteur décline toute responsabilité quant aux projets réalisés sur la base de ces estimations.
+            Consultez un professionnel avant tout travaux.
+          </div>
+        )}
       </div>
     </aside>
   );

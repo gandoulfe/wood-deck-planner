@@ -41,6 +41,7 @@ export interface LameConfig {
   showFinition: boolean;  // show/generate the last partial lame
   riveWidth: number;      // rive board width in m
   riveEdges: number[];    // outer polygon edge indices with rive boards
+  lameLength: number;     // standard commercial length in m (0 = libre)
 }
 
 export interface AppConfig {
@@ -48,6 +49,7 @@ export interface AppConfig {
   entraxe: number;        // m between lambourdes
   plotSpacing: number;    // max m between support plots
   lameConfig: LameConfig;
+  showStructure: boolean; // show lambourdes + plots on canvas
 }
 
 // ── Background image ─────────────────────────────────────────────────────────

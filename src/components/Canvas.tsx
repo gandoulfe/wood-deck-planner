@@ -18,6 +18,7 @@ interface CanvasProps {
   currentHole: Point[];
   isDrawingHole: boolean;
   riveBoards: RiveBoard[];
+  showStructure: boolean;
   onPointAdd: (p: Point) => void;
   onClose: () => void;
   onUndo: () => void;
@@ -45,7 +46,7 @@ type Interaction =
 export const Canvas: React.FC<CanvasProps> = ({
   points, isClosed, structure, lames, lameConfig, lameAngle,
   bgImage, calibration,
-  holes, currentHole, isDrawingHole, riveBoards,
+  holes, currentHole, isDrawingHole, riveBoards, showStructure,
   onPointAdd, onClose, onUndo, onVertexMove, onBgImageMove, onCalibrationPoint,
   onHolePointAdd, onHoleClose, onHoleUndo, onCancelHole,
   onHoleVertexMove, onToggleRiveEdge,
@@ -383,7 +384,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           {/* Lame clip path — uses evenodd so holes are excluded */}
           {isClosed && lameConfig.visible && shapePath && (
             <clipPath id={lameClipId}>
-              <path d={shapePath} fillRule="evenodd" />
+              <path d={shapePath} clipRule="evenodd" fillRule="evenodd" />
             </clipPath>
           )}
         </defs>
@@ -456,6 +457,29 @@ export const Canvas: React.FC<CanvasProps> = ({
           </g>
         )}
 
+        {/* ── Joint lines (calpinage) ─────────────────────────────────────── */}
+        {isClosed && lameConfig.visible && lameConfig.lameLength > 0 && lames.length > 0 && shapePath && (() => {
+          const spreadProjs = points.map(p => p.x * spreadDir.x + p.y * spreadDir.y);
+          const sMin = Math.min(...spreadProjs);
+          const sMax = Math.max(...spreadProjs);
+          const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+          for (let k = 1; sMin + k * lameConfig.lameLength < sMax; k++) {
+            const t = sMin + k * lameConfig.lameLength;
+            const origin = { x: t * spreadDir.x, y: t * spreadDir.y };
+            const ps = toSvg({ x: origin.x - EXTENT * lambDir.x, y: origin.y - EXTENT * lambDir.y });
+            const pe = toSvg({ x: origin.x + EXTENT * lambDir.x, y: origin.y + EXTENT * lambDir.y });
+            lines.push({ x1: ps.x, y1: ps.y, x2: pe.x, y2: pe.y });
+          }
+          return (
+            <g clipPath={`url(#${lameClipId})`}>
+              {lines.map((l, i) => (
+                <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+                  stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" strokeDasharray="4,3" />
+              ))}
+            </g>
+          );
+        })()}
+
         {/* ── Rive boards ─────────────────────────────────────────────────── */}
         {isClosed && lameConfig.visible && riveBoards.length > 0 && shapePath && (
           <g clipPath={`url(#${lameClipId})`}>
@@ -479,7 +503,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         )}
 
         {/* ── Lambourde structure ─────────────────────────────────────────── */}
-        {structure && (
+        {structure && showStructure && (
           <g>
             {structure.cadreLambourdes.map((seg, i) => {
               const s = toSvg(seg.start), e2 = toSvg(seg.end);
@@ -559,12 +583,21 @@ export const Canvas: React.FC<CanvasProps> = ({
               points={currentHole.map(p => { const s = toSvg(p); return `${s.x},${s.y}`; }).join(' ')}
               fill="none" stroke="#1565c0" strokeWidth="2.5" strokeLinejoin="round" />
             {/* Preview segment to cursor */}
-            {cursorSvg && calibration.phase === 'idle' && (() => {
+            {cursorSvg && mouse && calibration.phase === 'idle' && (() => {
               const last = toSvg(currentHole[currentHole.length - 1]);
+              const angle = Math.atan2(cursorSvg.y - last.y, cursorSvg.x - last.x);
+              const mx = (last.x + cursorSvg.x) / 2 - Math.sin(angle) * 14;
+              const my = (last.y + cursorSvg.y) / 2 + Math.cos(angle) * 14;
+              const dist = distance(currentHole[currentHole.length - 1], mouse).toFixed(2);
               return (
                 <>
                   <line x1={last.x} y1={last.y} x2={cursorSvg.x} y2={cursorSvg.y}
                     stroke="#1565c0" strokeWidth="2" strokeDasharray="6,4" />
+                  <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
+                    fontSize="12" fontFamily="system-ui" fontWeight="600"
+                    fill="#1565c0" stroke="white" strokeWidth="3" paintOrder="stroke">
+                    {dist} m
+                  </text>
                   {nearFirstHole && currentHole.length >= 3 && (() => {
                     const fs = toSvg(currentHole[0]);
                     return <line x1={last.x} y1={last.y} x2={fs.x} y2={fs.y} stroke="#1565c0" strokeWidth="2.5" />;
@@ -602,10 +635,23 @@ export const Canvas: React.FC<CanvasProps> = ({
         })()}
 
         {/* Preview segment (outer polygon) */}
-        {!isClosed && prevSvg && cursorSvg && calibration.phase === 'idle' && (
-          <line x1={prevSvg.x} y1={prevSvg.y} x2={cursorSvg.x} y2={cursorSvg.y}
-            stroke="#81c784" strokeWidth="2" strokeDasharray="6,4" />
-        )}
+        {!isClosed && prevSvg && cursorSvg && mouse && calibration.phase === 'idle' && (() => {
+          const angle = Math.atan2(cursorSvg.y - prevSvg.y, cursorSvg.x - prevSvg.x);
+          const mx = (prevSvg.x + cursorSvg.x) / 2 - Math.sin(angle) * 14;
+          const my = (prevSvg.y + cursorSvg.y) / 2 + Math.cos(angle) * 14;
+          const dist = distance(points[points.length - 1], mouse).toFixed(2);
+          return (
+            <g>
+              <line x1={prevSvg.x} y1={prevSvg.y} x2={cursorSvg.x} y2={cursorSvg.y}
+                stroke="#81c784" strokeWidth="2" strokeDasharray="6,4" />
+              <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
+                fontSize="12" fontFamily="system-ui" fontWeight="600"
+                fill="#1b5e20" stroke="white" strokeWidth="3" paintOrder="stroke">
+                {dist} m
+              </text>
+            </g>
+          );
+        })()}
         {!isClosed && nearFirst && prevSvg && firstSvg && (
           <line x1={prevSvg.x} y1={prevSvg.y} x2={firstSvg.x} y2={firstSvg.y}
             stroke="#43a047" strokeWidth="2.5" />
