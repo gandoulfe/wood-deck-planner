@@ -130,20 +130,15 @@ export function generateLames(
   lameAngle: number,
   cfg: LameConfig,
 ): LameItem[] {
-  const { width: lameW, gap, showFinition, riveEdges } = cfg;
+  const { width: lameW, gap, showFinition, riveEdges, riveWidth } = cfg;
   const { lambDir } = lameAxes(lameAngle);
 
   const lambProjs = polygon.map(p => p.x * lambDir.x + p.y * lambDir.y);
   const lambMin   = Math.min(...lambProjs);
   const lambMax   = Math.max(...lambProjs);
   const lambMid   = (lambMin + lambMax) / 2;
-  const span      = lambMax - lambMin;
 
-  const step      = lameW + gap;
-  const n         = Math.floor((span + gap) / step);
-  const remainder = span - n * step + gap; // width of partial board at 'end'
-
-  // Determine finition side from rive edges: rive on lambMin side → finition at start
+  // Detect which sides have rive boards (start = lambMin side, end = lambMax side)
   let hasRiveStart = false, hasRiveEnd = false;
   for (const i of riveEdges) {
     const a = polygon[i], b = polygon[(i + 1) % polygon.length];
@@ -151,29 +146,24 @@ export function generateLames(
     if (proj < lambMid) hasRiveStart = true; else hasRiveEnd = true;
   }
 
-  let vStart: number;
-  if (hasRiveStart && !hasRiveEnd) {
-    vStart = remainder > 0.001 ? lambMin - (lameW - remainder) : lambMin;
-  } else if (hasRiveStart && hasRiveEnd) {
-    vStart = remainder > 0.001 ? lambMin - (lameW - remainder / 2) : lambMin;
-  } else {
-    vStart = lambMin; // finition at end (default, or rive only on end side)
-  }
+  // Shrink effective bounds so regular boards don't overlap rive boards
+  const effMin = hasRiveStart ? lambMin + riveWidth + gap : lambMin;
+  const effMax = hasRiveEnd   ? lambMax - riveWidth - gap : lambMax;
 
+  const step = lameW + gap;
   const lames: LameItem[] = [];
-  let t = vStart;
+  let t = effMin;
 
-  while (t < lambMax - 0.005) {
-    const visStart = Math.max(t, lambMin);
-    const visEnd   = Math.min(t + lameW, lambMax);
-    const visWidth = visEnd - visStart;
+  while (t < effMax - 0.005) {
+    const visEnd   = Math.min(t + lameW, effMax);
+    const visWidth = visEnd - t;
 
     if (visWidth > 0.001) {
       const isFinition = visWidth < lameW - 0.001;
       if (isFinition) {
-        if (showFinition && visWidth > 0.02) lames.push({ t: visStart, width: visWidth, isFinition: true, isRive: false });
+        if (showFinition && visWidth > 0.02) lames.push({ t, width: visWidth, isFinition: true, isRive: false });
       } else {
-        lames.push({ t: visStart, width: visWidth, isFinition: false, isRive: false });
+        lames.push({ t, width: visWidth, isFinition: false, isRive: false });
       }
     }
     t += step;
