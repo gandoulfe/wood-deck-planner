@@ -116,6 +116,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': 'rangées',
     'panel.sections': 'Sections de terrasse',
     'panel.addSection': '+ Nouvelle section',
+
+    'panel.calpinageMode': 'Mode de calpinage',
+    'panel.calpinageAligned': 'Aligné',
+    'panel.calpinageHalf': 'Décalé 1/2',
+    'panel.calpinageThird': 'Décalé 1/3',
+
+    'panel.prixHeader': 'Estimation de prix HT',
+    'panel.prixLameMl': 'Lame (€/ml)',
+    'panel.prixLambMl': 'Lambourde (€/ml)',
+    'panel.prixVisPce': 'Vis (€/pce)',
+    'panel.prixPlotPce': 'Plot (€/pce)',
+    'panel.prixTotal': 'Total HT estimé',
+    'panel.prixNote': 'Prix indicatifs — à ajuster selon devis',
   },
 
   en: {
@@ -221,6 +234,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': 'rows',
     'panel.sections': 'Deck sections',
     'panel.addSection': '+ New section',
+
+    'panel.calpinageMode': 'Layout pattern',
+    'panel.calpinageAligned': 'Aligned',
+    'panel.calpinageHalf': 'Offset 1/2',
+    'panel.calpinageThird': 'Offset 1/3',
+
+    'panel.prixHeader': 'Price estimate (excl. VAT)',
+    'panel.prixLameMl': 'Board (€/ml)',
+    'panel.prixLambMl': 'Joist (€/ml)',
+    'panel.prixVisPce': 'Screw (€/ea)',
+    'panel.prixPlotPce': 'Pad (€/ea)',
+    'panel.prixTotal': 'Estimated total',
+    'panel.prixNote': 'Indicative prices — adjust to your quotes',
   },
 
   es: {
@@ -326,6 +352,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': 'hileras',
     'panel.sections': 'Secciones',
     'panel.addSection': '+ Nueva sección',
+
+    'panel.calpinageMode': 'Patrón de juntas',
+    'panel.calpinageAligned': 'Alineado',
+    'panel.calpinageHalf': 'Desplazado 1/2',
+    'panel.calpinageThird': 'Desplazado 1/3',
+
+    'panel.prixHeader': 'Estimación de precio (sin IVA)',
+    'panel.prixLameMl': 'Tabla (€/ml)',
+    'panel.prixLambMl': 'Vigueta (€/ml)',
+    'panel.prixVisPce': 'Tornillo (€/ud)',
+    'panel.prixPlotPce': 'Soporte (€/ud)',
+    'panel.prixTotal': 'Total estimado',
+    'panel.prixNote': 'Precios indicativos — ajustar según presupuesto',
   },
 
   zh: {
@@ -431,6 +470,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': '列',
     'panel.sections': '区域',
     'panel.addSection': '+ 新建区域',
+
+    'panel.calpinageMode': '拼缝模式',
+    'panel.calpinageAligned': '对齐',
+    'panel.calpinageHalf': '错位 1/2',
+    'panel.calpinageThird': '错位 1/3',
+
+    'panel.prixHeader': '价格估算（不含税）',
+    'panel.prixLameMl': '木板 (€/ml)',
+    'panel.prixLambMl': '龙骨 (€/ml)',
+    'panel.prixVisPce': '螺丝 (€/个)',
+    'panel.prixPlotPce': '支撑 (€/个)',
+    'panel.prixTotal': '估算总价',
+    'panel.prixNote': '参考价格 — 请根据实际报价调整',
   },
 
   ja: {
@@ -536,6 +588,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': '列',
     'panel.sections': 'セクション',
     'panel.addSection': '+ セクションを追加',
+
+    'panel.calpinageMode': '目地パターン',
+    'panel.calpinageAligned': '揃え',
+    'panel.calpinageHalf': 'ずらし 1/2',
+    'panel.calpinageThird': 'ずらし 1/3',
+
+    'panel.prixHeader': '価格見積（税抜）',
+    'panel.prixLameMl': 'デッキ材 (€/ml)',
+    'panel.prixLambMl': '根太 (€/ml)',
+    'panel.prixVisPce': 'ビス (€/本)',
+    'panel.prixPlotPce': 'パッド (€/個)',
+    'panel.prixTotal': '概算合計',
+    'panel.prixNote': '参考価格 — 見積に合わせて調整してください',
   },
 
   de: {
@@ -641,6 +706,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': 'Reihen',
     'panel.sections': 'Abschnitte',
     'panel.addSection': '+ Neuer Abschnitt',
+
+    'panel.calpinageMode': 'Verlegemuster',
+    'panel.calpinageAligned': 'Bündig',
+    'panel.calpinageHalf': 'Versetzt 1/2',
+    'panel.calpinageThird': 'Versetzt 1/3',
+
+    'panel.prixHeader': 'Kostenabschätzung (netto)',
+    'panel.prixLameMl': 'Diele (€/lfm)',
+    'panel.prixLambMl': 'Balken (€/lfm)',
+    'panel.prixVisPce': 'Schraube (€/Stk)',
+    'panel.prixPlotPce': 'Stelze (€/Stk)',
+    'panel.prixTotal': 'Geschätzte Summe',
+    'panel.prixNote': 'Richtwerte — bitte nach Angebot anpassen',
   },
 
   ru: {
@@ -746,6 +824,19 @@ const tr: Record<Lang, TR> = {
     'panel.rangees': 'рядов',
     'panel.sections': 'Секции',
     'panel.addSection': '+ Новая секция',
+
+    'panel.calpinageMode': 'Схема стыков',
+    'panel.calpinageAligned': 'Вровень',
+    'panel.calpinageHalf': 'Сдвиг 1/2',
+    'panel.calpinageThird': 'Сдвиг 1/3',
+
+    'panel.prixHeader': 'Смета (без НДС)',
+    'panel.prixLameMl': 'Доска (€/пм)',
+    'panel.prixLambMl': 'Лага (€/пм)',
+    'panel.prixVisPce': 'Винт (€/шт)',
+    'panel.prixPlotPce': 'Опора (€/шт)',
+    'panel.prixTotal': 'Итого (ориент.)',
+    'panel.prixNote': 'Ориентировочные цены — уточните по смете',
   },
 };
 

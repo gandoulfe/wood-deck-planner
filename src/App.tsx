@@ -25,6 +25,7 @@ const DEFAULT_CONFIG: AppConfig = {
     riveWidth: 0.145,
     riveEdges: [],
     lameLength: 4,
+    calpinageMode: 'aligned',
   },
 };
 

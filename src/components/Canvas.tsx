@@ -16,6 +16,33 @@ interface InactiveSection {
   structure: LambourdeStructure | null;
 }
 
+// ── Right-angle helpers ─────────────────────────────────────────────────────
+function isNearRightAngle(m: Point, pts: Point[], threshold = 0.087): boolean {
+  if (pts.length < 2) return false;
+  const prev = pts[pts.length - 1], pp = pts[pts.length - 2];
+  const dx1 = prev.x - pp.x, dy1 = prev.y - pp.y;
+  const dx2 = m.x - prev.x,  dy2 = m.y - prev.y;
+  const l1 = Math.hypot(dx1, dy1), l2 = Math.hypot(dx2, dy2);
+  return l1 > 1e-10 && l2 > 1e-10 && Math.abs((dx1 * dx2 + dy1 * dy2) / (l1 * l2)) < threshold;
+}
+
+function rightAngleConstrain(cursor: Point, pts: Point[]): Point {
+  const prev = pts[pts.length - 1];
+  if (pts.length === 1) {
+    // Snap to cardinal axis (H or V) from the first point
+    const dx = Math.abs(cursor.x - prev.x), dy = Math.abs(cursor.y - prev.y);
+    return dx >= dy ? { x: cursor.x, y: prev.y } : { x: prev.x, y: cursor.y };
+  }
+  // Project cursor onto the line through prev perpendicular to prev segment
+  const pp = pts[pts.length - 2];
+  const sx = prev.x - pp.x, sy = prev.y - pp.y;
+  const len = Math.hypot(sx, sy);
+  if (len < 1e-10) return cursor;
+  const perp = { x: -sy / len, y: sx / len };
+  const t = (cursor.x - prev.x) * perp.x + (cursor.y - prev.y) * perp.y;
+  return { x: prev.x + t * perp.x, y: prev.y + t * perp.y };
+}
+
 function pointInPolygon(p: Point, poly: Point[]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -85,7 +112,18 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [hoverVertex,     setHoverVertex]     = useState<number | null>(null);
   const [hoverHoleVertex, setHoverHoleVertex] = useState<{ hi: number; vi: number } | null>(null);
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
+  const [shiftDown,    setShiftDown]    = useState(false);
+  const [isRASnapping, setIsRASnapping] = useState(false);
   const isDragging = useRef(false);
+
+  // ── Shift key tracking ───────────────────────────────────────────────────
+  useEffect(() => {
+    const kd = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftDown(true); };
+    const ku = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftDown(false); };
+    window.addEventListener('keydown', kd);
+    window.addEventListener('keyup', ku);
+    return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); };
+  }, []);
 
   // ── coordinate helpers ──────────────────────────────────────────────────
   const toSvg   = useCallback((m: Point): Point => ({ x: m.x * scale + offset.x, y: m.y * scale + offset.y }), [scale, offset]);
@@ -163,7 +201,23 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    const m = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
+    let m = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
+    let raSnapping = false;
+    if (interaction.type === 'none') {
+      if (!isClosed && !isDrawingHole && points.length >= 1) {
+        if (e.shiftKey || isNearRightAngle(m, points)) {
+          m = rightAngleConstrain(m, points);
+          raSnapping = points.length >= 2;
+        }
+      } else if (isDrawingHole && currentHole.length >= 1) {
+        if (e.shiftKey || isNearRightAngle(m, currentHole)) {
+          m = rightAngleConstrain(m, currentHole);
+          raSnapping = currentHole.length >= 2;
+        }
+      }
+    }
+    setShiftDown(e.shiftKey);
+    setIsRASnapping(raSnapping);
     setMouse(m);
 
     if (isClosed && !isDrawingHole) {
@@ -255,7 +309,11 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0 || isDragging.current) return;
     const svg = svgXY(e);
-    const m   = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
+    let m = snapToSectionVertex(snapToGrid(toMeter(svg.x, svg.y)), svg);
+    if (!isClosed && !isDrawingHole && points.length >= 1 && (e.shiftKey || isNearRightAngle(m, points)))
+      m = rightAngleConstrain(m, points);
+    else if (isDrawingHole && currentHole.length >= 1 && (e.shiftKey || isNearRightAngle(m, currentHole)))
+      m = rightAngleConstrain(m, currentHole);
 
     if (calibration.phase === 'p1' || calibration.phase === 'p2') { onCalibrationPoint(m); return; }
 
@@ -583,17 +641,25 @@ export const Canvas: React.FC<CanvasProps> = ({
           const spreadProjs = points.map(p => p.x * spreadDir.x + p.y * spreadDir.y);
           const sMin = Math.min(...spreadProjs);
           const sMax = Math.max(...spreadProjs);
-          const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
-          for (let k = 1; sMin + k * lameConfig.lameLength < sMax; k++) {
-            const t = sMin + k * lameConfig.lameLength;
-            const origin = { x: t * spreadDir.x, y: t * spreadDir.y };
-            const ps = toSvg({ x: origin.x - EXTENT * lambDir.x, y: origin.y - EXTENT * lambDir.y });
-            const pe = toSvg({ x: origin.x + EXTENT * lambDir.x, y: origin.y + EXTENT * lambDir.y });
-            lines.push({ x1: ps.x, y1: ps.y, x2: pe.x, y2: pe.y });
-          }
+          const L = lameConfig.lameLength;
+          const mode = lameConfig.calpinageMode ?? 'aligned';
+          const segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+          lames.forEach((lame, rowIdx) => {
+            let off = 0;
+            if (mode === 'half')  off = (rowIdx % 2) * L / 2;
+            else if (mode === 'third') off = (rowIdx % 3) * L / 3;
+            for (let k = 0; ; k++) {
+              const s = sMin + off + k * L;
+              if (s >= sMax) break;
+              if (s <= sMin) continue;
+              const ps = toSvg({ x: s * spreadDir.x + lame.t * lambDir.x,            y: s * spreadDir.y + lame.t * lambDir.y });
+              const pe = toSvg({ x: s * spreadDir.x + (lame.t + lame.width) * lambDir.x, y: s * spreadDir.y + (lame.t + lame.width) * lambDir.y });
+              segs.push({ x1: ps.x, y1: ps.y, x2: pe.x, y2: pe.y });
+            }
+          });
           return (
             <g clipPath={`url(#${lameClipId})`}>
-              {lines.map((l, i) => (
+              {segs.map((l, i) => (
                 <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
                   stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" strokeDasharray="4,3" />
               ))}
@@ -761,13 +827,34 @@ export const Canvas: React.FC<CanvasProps> = ({
           const mx = (prevSvg.x + cursorSvg.x) / 2 - Math.sin(angle) * 14;
           const my = (prevSvg.y + cursorSvg.y) / 2 + Math.cos(angle) * 14;
           const dist = distance(points[points.length - 1], mouse).toFixed(2);
+
+          // raActive: set by handleMouseMove (auto-snap already applied to mouse)
+          const raActive = shiftDown || isRASnapping;
+          const lineColor = raActive ? '#00bcd4' : '#81c784';
+          const textColor = raActive ? '#006064' : '#1b5e20';
+
           return (
             <g>
               <line x1={prevSvg.x} y1={prevSvg.y} x2={cursorSvg.x} y2={cursorSvg.y}
-                stroke="#81c784" strokeWidth="2" strokeDasharray="6,4" />
+                stroke={lineColor} strokeWidth={raActive ? 2.5 : 2} strokeDasharray="6,4" />
+              {/* Right angle square indicator */}
+              {raActive && points.length >= 2 && (() => {
+                const pp2 = toSvg(points[points.length - 2]);
+                const SQ = 11;
+                const d1l = Math.hypot(prevSvg.x - pp2.x, prevSvg.y - pp2.y);
+                const d2l = Math.hypot(cursorSvg.x - prevSvg.x, cursorSvg.y - prevSvg.y);
+                if (!d1l || !d2l) return null;
+                const d1 = { x: (prevSvg.x - pp2.x) / d1l, y: (prevSvg.y - pp2.y) / d1l };
+                const d2 = { x: (cursorSvg.x - prevSvg.x) / d2l, y: (cursorSvg.y - prevSvg.y) / d2l };
+                const c1 = { x: prevSvg.x + SQ * d1.x, y: prevSvg.y + SQ * d1.y };
+                const c2 = { x: prevSvg.x + SQ * d2.x, y: prevSvg.y + SQ * d2.y };
+                const c3 = { x: c1.x + SQ * d2.x, y: c1.y + SQ * d2.y };
+                return <path key="ra" d={`M ${c1.x} ${c1.y} L ${c3.x} ${c3.y} L ${c2.x} ${c2.y}`}
+                  fill="none" stroke={lineColor} strokeWidth="1.5" />;
+              })()}
               <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
                 fontSize="12" fontFamily="system-ui" fontWeight="600"
-                fill="#1b5e20" stroke="white" strokeWidth="3" paintOrder="stroke">
+                fill={textColor} stroke="white" strokeWidth="3" paintOrder="stroke">
                 {dist} m
               </text>
             </g>

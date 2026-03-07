@@ -113,6 +113,10 @@ export const Panel: React.FC<PanelProps> = ({
   const [bgLoading, setBgLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [legalOpen, setLegalOpen] = useState(false);
+  const [prixLameMl,  setPrixLameMl]  = useState(23);    // €/ml — Cumaru 57€/2.45m
+  const [prixLambMl,  setPrixLambMl]  = useState(5.20);  // €/ml — invoice default
+  const [prixVis,     setPrixVis]     = useState(0.15);  // €/pce
+  const [prixPlot,    setPrixPlot]    = useState(2.00);  // €/pce
   const [calibDistStr, setCalibDistStr] = useState(
     String(unit === 'imperial' ? +mToFt(calibration.realDistance).toFixed(3) : calibration.realDistance)
   );
@@ -360,7 +364,22 @@ export const Panel: React.FC<PanelProps> = ({
             ))}
           </div>
           {lc.lameLength > 0 && (
-            <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 0' }}>{T('panel.lameLengthNote')}</p>
+            <>
+              <p style={{ fontSize: 10, color: '#8d6e63', margin: '3px 0 4px' }}>{T('panel.lameLengthNote')}</p>
+              <label style={{ ...label, marginBottom: 3 }}>{T('panel.calpinageMode')}</label>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {(['aligned', 'half', 'third'] as const).map(mode => (
+                  <button key={mode} onClick={() => setLc({ calpinageMode: mode })}
+                    style={{ flex: 1, padding: '3px 0', borderRadius: 5, border: '1px solid', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                      background: (lc.calpinageMode ?? 'aligned') === mode ? '#795548' : '#fff',
+                      color:      (lc.calpinageMode ?? 'aligned') === mode ? '#fff'    : '#5d4037',
+                      borderColor: (lc.calpinageMode ?? 'aligned') === mode ? '#795548' : '#bcaaa4',
+                      fontWeight: (lc.calpinageMode ?? 'aligned') === mode ? 700 : 400 }}>
+                    {mode === 'aligned' ? T('panel.calpinageAligned') : mode === 'half' ? T('panel.calpinageHalf') : T('panel.calpinageThird')}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
@@ -528,6 +547,55 @@ export const Panel: React.FC<PanelProps> = ({
                 ))}
               </>
             )}
+
+            {/* ── Estimation de prix ────────────────────────────────────── */}
+            {(lameMetres || structure) && (() => {
+              const totalLameLinear = (lameMetres?.totalLinear ?? 0) + (lameMetres?.riveTotalLinear ?? 0);
+              const totalLambLinear = (structure?.totalLength ?? 0) + (structure?.cadreTotalLength ?? 0);
+              const costLames  = totalLameLinear * prixLameMl;
+              const costLamb   = totalLambLinear * prixLambMl;
+              const costVis    = (lameMetres?.visCount ?? 0) * prixVis;
+              const costPlots  = (structure?.plotCount ?? 0) * prixPlot;
+              const total      = costLames + costLamb + costVis + costPlots;
+              const fmt = (n: number) => n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f') + ' €';
+              const inpSm: React.CSSProperties = { ...inp, padding: '3px 5px', fontSize: 11, textAlign: 'right' };
+              return (
+                <div style={{ marginTop: 8, borderTop: '1px dashed #d7ccc8', paddingTop: 8 }}>
+                  <div style={{ ...statRow, color: '#5d4037', fontWeight: 600, fontSize: 11, marginBottom: 5 }}>
+                    <span>{T('panel.prixHeader')}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', marginBottom: 5 }}>
+                    {([
+                      [T('panel.prixLameMl'),  prixLameMl,  setPrixLameMl],
+                      [T('panel.prixLambMl'),  prixLambMl,  setPrixLambMl],
+                      [T('panel.prixVisPce'),  prixVis,     setPrixVis],
+                      [T('panel.prixPlotPce'), prixPlot,    setPrixPlot],
+                    ] as [string, number, (v: number) => void][]).map(([lbl, val, set]) => (
+                      <div key={lbl}>
+                        <div style={{ fontSize: 9, color: '#795548', fontWeight: 600, marginBottom: 1 }}>{lbl}</div>
+                        <input style={inpSm} type="number" min={0} step={0.01}
+                          value={val} onChange={e => set(Number(e.target.value))} />
+                      </div>
+                    ))}
+                  </div>
+                  {[
+                    { label: T('panel.prixLameMl'),  val: fmt(costLames) },
+                    { label: T('panel.prixLambMl'),  val: fmt(costLamb) },
+                    { label: T('panel.prixVisPce'),  val: fmt(costVis) },
+                    { label: T('panel.prixPlotPce'), val: fmt(costPlots) },
+                  ].map((r, i) => (
+                    <div key={i} style={{ ...statRow, fontSize: 11, color: '#8d6e63' }}>
+                      <span>{r.label}</span><span>{r.val}</span>
+                    </div>
+                  ))}
+                  <div style={{ ...statRow, marginTop: 4, fontWeight: 700, fontSize: 13, color: '#3e2723', borderTop: '1px solid #bcaaa4', paddingTop: 4 }}>
+                    <span>{T('panel.prixTotal')}</span>
+                    <span style={{ color: '#4e342e' }}>{fmt(total)}</span>
+                  </div>
+                  <p style={{ fontSize: 9, color: '#a1887f', margin: '4px 0 0' }}>{T('panel.prixNote')}</p>
+                </div>
+              );
+            })()}
           </>
         )}
       </div>

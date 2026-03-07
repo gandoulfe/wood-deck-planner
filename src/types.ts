@@ -52,6 +52,7 @@ export interface LameConfig {
   riveWidth: number;      // rive board width in m
   riveEdges: number[];    // outer polygon edge indices with rive boards
   lameLength: number;     // standard commercial length in m (0 = libre)
+  calpinageMode: 'aligned' | 'half' | 'third'; // joint stagger pattern
 }
 
 export interface AppConfig {
